@@ -18,7 +18,6 @@ import { loginAdmin } from "@/lib/authService";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useForm as useReactHookForm } from "react-hook-form";
 
 const formSchema = z.object({
   identifier: z.string().email({
@@ -34,7 +33,7 @@ export default function LoginPage() {
   const setTokens = useAuthStore((state) => state.setTokens);
   const setUser = useAuthStore((state) => state.setUser);
 
-  const form = useReactHookForm<z.infer<typeof formSchema>>({
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema) as any,
     defaultValues: {
       identifier: "",
@@ -45,8 +44,11 @@ export default function LoginPage() {
   const loginMutation = useMutation({
     mutationFn: loginAdmin,
     onSuccess: (data) => {
-      if (data.user?.role?.toUpperCase() !== "ADMIN") {
-        toast.error("You do not have permission to access the admin dashboard.");
+      const role = (data.user?.role ?? "").toUpperCase();
+      if (role !== "ADMIN") {
+        toast.error(
+          `Access denied: your account role ("${data.user?.role ?? "unknown"}") does not have admin privileges.`,
+        );
         return;
       }
       setTokens(data.access_token, data.refresh_token);

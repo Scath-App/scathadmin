@@ -2,14 +2,35 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getUserInvestments,
   getUserTransactions,
   getUserSaveboxes,
   getUserEquity,
   getUserAccounts,
+  getUserById,
+  updateUser,
 } from "@/lib/userService";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +51,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -41,6 +62,17 @@ const fmt = (kobo: number | string) => {
 };
 
 const PAGE_LIMIT = 10;
+
+// ─── Edit User Schema ──────────────────────────────────────────────────────────
+
+const editUserSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  phoneNumber: z.string().optional(),
+  role: z.enum(["admin", "staff", "partner", "user"]).optional(),
+});
+
 
 // ─── Stat Card ─────────────────────────────────────────────────────────────────
 
@@ -129,7 +161,11 @@ function PaginationBar({
 export default function UserDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const userId = Number(params.id);
+
+  // ── Edit modal state
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   // Pagination state
   const [invPage, setInvPage] = useState(0);
@@ -137,6 +173,41 @@ export default function UserDetailPage() {
   const [sbPage, setSbPage] = useState(0);
   const [eqPage, setEqPage] = useState(0);
   const [invStatus, setInvStatus] = useState<string>("");
+
+  // ─── Profile query ────────────────────────────────────────────────────────
+  const { data: profileData, isLoading: profileLoading } = useQuery({
+    queryKey: ["userProfile", userId],
+    queryFn: () => getUserById(userId),
+    enabled: !!userId,
+  });
+
+  const profile: any = profileData?.data ?? profileData ?? {};
+
+  // ─── Edit form ────────────────────────────────────────────────────────────
+  const editForm = useForm<z.infer<typeof editUserSchema>>({
+    resolver: zodResolver(editUserSchema) as any,
+    values: {
+      firstName: profile.firstName ?? "",
+      lastName: profile.lastName ?? "",
+      email: profile.email ?? "",
+      phoneNumber: profile.phoneNumber ?? "",
+      role: profile.role?.toLowerCase() ?? "user",
+    },
+  });
+
+  // ─── Update mutation ─────────────────────────────────────────────────────
+  const updateMutation = useMutation({
+    mutationFn: (v: z.infer<typeof editUserSchema>) => updateUser(userId, v),
+    onSuccess: () => {
+      toast.success("User details updated.");
+      setIsEditOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["userProfile", userId] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e: any) => {
+      toast.error(e.response?.data?.message ?? "Failed to update user.");
+    },
+  });
 
   const { data: accountsData, isLoading: accountsLoading } = useQuery({
     queryKey: ["userAccounts", userId],
@@ -218,13 +289,37 @@ export default function UserDetailPage() {
           Back to Users
         </Button>
       </div>
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">
-          User #{userId} — Financial Overview
-        </h2>
-        <p className="text-gray-500 text-sm mt-0.5">
-          Admin access to this page is logged for compliance purposes.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          {profileLoading ? (
+            <Skeleton className="h-7 w-48 mb-1" />
+          ) : (
+            <h2 className="text-2xl font-bold text-gray-900">
+              {profile.firstName && profile.lastName
+                ? `${profile.firstName} ${profile.lastName}`
+                : `User #${userId}`}
+            </h2>
+          )}
+          {profileLoading ? (
+            <Skeleton className="h-4 w-56 mt-1" />
+          ) : (
+            <p className="text-gray-500 text-sm mt-0.5">
+              {profile.email ?? `User ID: ${userId}`}
+              {profile.phoneNumber && (
+                <span className="ml-3 text-gray-400">{profile.phoneNumber}</span>
+              )}
+            </p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          className="bg-blue hover:bg-darkBlue text-white gap-2 shrink-0"
+          onClick={() => setIsEditOpen(true)}
+          disabled={profileLoading}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          Edit Details
+        </Button>
       </div>
 
       <Tabs defaultValue="investments" className="w-full">
@@ -731,6 +826,99 @@ export default function UserDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* ── Edit User Modal ─────────────────────────────────────────────────── */}
+      <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) editForm.reset(); }}>
+
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit User Details</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form
+              onSubmit={editForm.handleSubmit((v) => updateMutation.mutate(v))}
+              className="space-y-4 pt-2"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={editForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={editForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl><Input type="email" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="phoneNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone Number</FormLabel>
+                    <FormControl><Input type="tel" placeholder="e.g. +2348012345678" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="staff">Staff</SelectItem>
+                        <SelectItem value="partner">Partner</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="submit"
+                className="w-full bg-blue text-white"
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+                ) : "Save Changes"}
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

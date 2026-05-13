@@ -2,10 +2,12 @@ import axios from "axios";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { toast } from "sonner";
 
+const BASE_URL =
+  process.env.NEXT_PUBLIC_BASE_ENDPOINT ||
+  "https://api-scath-0zj3.onrender.com/api/v1/";
+
 const api = axios.create({
-  baseURL:
-    process.env.NEXT_PUBLIC_BASE_ENDPOINT ||
-    "https://api-scath.onrender.com/api/v1/",
+  baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -37,7 +39,7 @@ api.interceptors.response.use(
         const refreshToken = useAuthStore.getState().refreshToken;
         if (refreshToken) {
           const res = await axios.post(
-            `${process.env.NEXT_PUBLIC_BASE_ENDPOINT}auth/refresh`,
+            `${BASE_URL}auth/refresh`,
             { refreshToken },
           );
           const { access_token } = res.data;

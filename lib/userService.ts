@@ -30,6 +30,20 @@ export const createAdminUser = async (data: {
   return response.data;
 };
 
+export const updateUser = async (
+  userId: number,
+  data: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phoneNumber?: string;
+    role?: string;
+  },
+) => {
+  const response = await api.patch(`admin/users/${userId}`, data);
+  return response.data;
+};
+
 export const sendCoins = async (userId: number, data: { amount: number; description?: string }) => {
   const response = await api.post(`admin/rewards/send/${userId}`, data);
   return response.data;
