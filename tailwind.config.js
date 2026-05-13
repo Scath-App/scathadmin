@@ -1,0 +1,48 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./app/*.tsx",
+    "./app/**/*.tsx",
+    "./components/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}",
+    "./features/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        white: "#ffffff",
+        darkBlue: "#021931",
+        blue: "#074D97",
+        lblue: "#0980FF",
+        sky: "#93C1E6",
+        faintSky: "#E5F4FF",
+        lsky: "#E6F4FF",
+        msky: "#D6E9FF",
+        dsky: "#0350A221",
+        pink: "#FF9D9D",
+        green: "#2EBA64",
+        armyGreen: "#1B6962",
+        greeny: "#53A753",
+        faintgreen: "#B1FFD891",
+        dullGreen: "#08703C91",
+        natureGreen: "#53A753",
+        gray: "#4D4D4D",
+        lgray: "#D9D9D9",
+        yellow: "#FFC52F",
+        purple: "#5727F5",
+        army: "#B1BB7C",
+        lemon: "#08FF2D",
+        red: "#EA4335",
+        fgray: "#999999",
+      },
+      fontFamily: {
+        inter: "Inter_400Regular",
+        "inter-medium": "Inter_500Medium",
+        "inter-semibold": "Inter_600SemiBold",
+        "inter-bold": "Inter_700Bold",
+        "inter-extraBold": "Inter_800ExtraBold",
+      },
+    },
+  },
+  plugins: [],
+};
