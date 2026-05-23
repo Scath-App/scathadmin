@@ -24,54 +24,13 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Users,
-  TrendingUp,
-  PiggyBank,
-  CreditCard,
-  ShoppingBag,
-  UserPlus,
-  Briefcase,
-  LineChart,
-  Settings,
-} from "lucide-react";
+  navSections,
+  dashboardItem,
+  settingsItem,
+  allNavLeaves,
+} from "@/lib/navConfig";
 
-const navItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "All Users", href: "/dashboard/users", icon: Users },
-  { name: "Audit Logs", href: "/dashboard/users/audit-logs", icon: Users },
-  { name: "Local Accounts", href: "/dashboard/accounts", icon: CreditCard },
-  {
-    name: "SafeHaven Accounts",
-    href: "/dashboard/accounts/safehaven",
-    icon: CreditCard,
-  },
-  {
-    name: "Treasury Dashboard",
-    href: "/dashboard/finance/treasury",
-    icon: CreditCard,
-  },
-  { name: "Payouts", href: "/dashboard/finance/payouts", icon: CreditCard },
-  { name: "Fee Configurations", href: "/dashboard/fees", icon: Settings },
-  { name: "Revenue Report", href: "/dashboard/fees/revenue", icon: LineChart },
-  { name: "Investments", href: "/dashboard/investments", icon: Briefcase },
-  { name: "Equity Listings", href: "/dashboard/equity", icon: TrendingUp },
-  {
-    name: "Exit Requests",
-    href: "/dashboard/equity/exit-requests",
-    icon: TrendingUp,
-  },
-  { name: "Savebox Config", href: "/dashboard/savebox", icon: PiggyBank },
-  {
-    name: "Portfolios",
-    href: "/dashboard/savebox/portfolios",
-    icon: PiggyBank,
-  },
-  { name: "Offers", href: "/dashboard/offers", icon: ShoppingBag },
-  { name: "Invoices", href: "/dashboard/invoices", icon: Settings },
-  { name: "Referral Settings", href: "/dashboard/referrals", icon: UserPlus },
-  { name: "Rewards", href: "/dashboard/rewards", icon: UserPlus },
-];
+// ─── Header ───────────────────────────────────────────────────────────────────
 
 export function Header() {
   const { user, logout } = useAuthStore();
@@ -90,14 +49,18 @@ export function Header() {
     (a: any) => a.accountName === "THESCATHCOMPANIES"
   );
 
-  const mainBalanceValue = adminAccount?.balanceInNaira ?? (Number(adminAccount?.accountBalanceInKobo ?? 0) / 100);
-  const mainBalance = mainBalanceValue.toLocaleString("en-NG", { minimumFractionDigits: 2 });
+  const mainBalanceValue =
+    adminAccount?.balanceInNaira ??
+    Number(adminAccount?.accountBalanceInKobo ?? 0) / 100;
+  const mainBalance = mainBalanceValue.toLocaleString("en-NG", {
+    minimumFractionDigits: 2,
+  });
 
   const getPageTitle = () => {
     if (pathname === "/dashboard") return "Dashboard";
-    const sorted = [...navItems].sort((a, b) => b.href.length - a.href.length);
+    const sorted = [...allNavLeaves].sort((a, b) => b.href.length - a.href.length);
     const found = sorted.find((item) => pathname.startsWith(item.href));
-    return found ? found.name : "Dashboard";
+    return found ? found.label : "Dashboard";
   };
 
   const initials =
@@ -106,6 +69,7 @@ export function Header() {
       .join("")
       .toUpperCase() || "AD";
 
+  // ── Dashboard home header (blue banner) ─────────────────────────────────────
   if (isDashboardHome) {
     return (
       <header className="bg-blue px-6 sm:px-8 pt-6 pb-10 text-white">
@@ -123,10 +87,7 @@ export function Header() {
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent
-                side="left"
-                className="w-72 p-0 bg-white border-r-0"
-              >
+              <SheetContent side="left" className="w-72 p-0 bg-white border-r-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
                 <MobileNav pathname={pathname} />
               </SheetContent>
@@ -135,9 +96,7 @@ export function Header() {
               <h1 className="text-2xl font-bold">Admin Dashboard</h1>
               <p className="text-white/80 text-sm mt-0.5">
                 Welcome back,{" "}
-                <span className="font-semibold">
-                  {user?.firstName || "Admin"}
-                </span>{" "}
+                <span className="font-semibold">{user?.firstName || "Admin"}</span>{" "}
                 👋
               </p>
             </div>
@@ -164,7 +123,7 @@ export function Header() {
             <EyeOff className="w-5 h-5 text-white/60" />
             <span className="text-4xl font-bold tracking-tight">
               {dashboardLoading ? (
-                <span className="opacity-50">₦ ...,...</span>
+                <span className="opacity-50">₦ ...,...,...</span>
               ) : (
                 <>
                   ₦ {mainBalance.split(".")[0]}
@@ -178,16 +137,13 @@ export function Header() {
     );
   }
 
+  // ── Inner page header ────────────────────────────────────────────────────────
   return (
     <header className="sticky top-0 z-30 h-16 w-full flex items-center justify-between border-b bg-white px-6 sm:px-8 shadow-sm">
       <div className="flex items-center gap-4">
         <Sheet>
           <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden text-gray-600"
-            >
+            <Button variant="ghost" size="icon" className="lg:hidden text-gray-600">
               <Menu className="h-6 w-6" />
             </Button>
           </SheetTrigger>
@@ -196,9 +152,7 @@ export function Header() {
             <MobileNav pathname={pathname} />
           </SheetContent>
         </Sheet>
-        <h1 className="text-lg font-semibold text-gray-900">
-          {getPageTitle()}
-        </h1>
+        <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
       </div>
       <div className="flex items-center gap-3">
         <Button
@@ -207,7 +161,7 @@ export function Header() {
           className="text-gray-500 hover:text-gray-700 relative"
         >
           <Bell className="h-5 w-5" />
-          <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-red border-2 border-white" />
+          <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-red-500 border-2 border-white" />
         </Button>
         <UserMenu user={user} logout={logout} initials={initials} />
       </div>
@@ -215,10 +169,18 @@ export function Header() {
   );
 }
 
+// ─── Mobile Nav ───────────────────────────────────────────────────────────────
+
 function MobileNav({ pathname }: { pathname: string }) {
+  const isActive = (href: string) =>
+    href === "/dashboard"
+      ? pathname === "/dashboard"
+      : pathname.startsWith(href);
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 pt-8 pb-5">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Logo */}
+      <div className="px-6 pt-8 pb-5 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-blue flex items-center justify-center">
             <svg viewBox="0 0 20 20" fill="none" className="w-5 h-5">
@@ -232,41 +194,94 @@ function MobileNav({ pathname }: { pathname: string }) {
               />
             </svg>
           </div>
-          <span className="text-lg font-bold text-gray-900">Scath App</span>
+          <span className="text-lg font-bold text-gray-900">Scath Admin</span>
         </div>
       </div>
-      <div className="mx-6 h-px bg-gray-100 mb-4" />
-      <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
-                isActive
-                  ? "bg-blue text-white"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+
+      <div className="mx-6 h-px bg-gray-100 mb-3 shrink-0" />
+
+      {/* Nav */}
+      <nav className="flex-1 px-4 overflow-y-auto">
+        {/* Dashboard */}
+        <Link
+          href={dashboardItem.href}
+          className={cn(
+            "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all mb-1",
+            isActive(dashboardItem.href)
+              ? "bg-blue text-white"
+              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+          )}
+        >
+          <dashboardItem.icon
+            className={cn(
+              "w-4 h-4 shrink-0",
+              isActive(dashboardItem.href) ? "text-white" : "text-gray-400",
+            )}
+          />
+          {dashboardItem.label}
+        </Link>
+
+        {/* Sections */}
+        {navSections.map((section) => (
+          <div key={section.sectionLabel} className="mt-4">
+            {section.sectionLabel && (
+              <p className="px-4 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400 select-none">
+                {section.sectionLabel}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {section.groups.flatMap((group) =>
+                group.children.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all",
+                      isActive(item.href)
+                        ? "bg-blue text-white"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    )}
+                  >
+                    <item.icon
+                      className={cn(
+                        "w-4 h-4 shrink-0",
+                        isActive(item.href) ? "text-white" : "text-gray-400",
+                      )}
+                    />
+                    {item.label}
+                  </Link>
+                )),
               )}
-            >
-              <item.icon
-                className={cn(
-                  "w-4 h-4 shrink-0",
-                  isActive ? "text-white" : "text-gray-400",
-                )}
-              />
-              {item.name}
-            </Link>
-          );
-        })}
+            </div>
+          </div>
+        ))}
+
+        {/* Settings */}
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <Link
+            href={settingsItem.href}
+            className={cn(
+              "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all",
+              isActive(settingsItem.href)
+                ? "bg-blue text-white"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+            )}
+          >
+            <settingsItem.icon
+              className={cn(
+                "w-4 h-4 shrink-0",
+                isActive(settingsItem.href) ? "text-white" : "text-gray-400",
+              )}
+            />
+            {settingsItem.label}
+          </Link>
+        </div>
       </nav>
     </div>
   );
 }
+
+// ─── User Menu ────────────────────────────────────────────────────────────────
 
 function UserMenu({
   user,
@@ -301,13 +316,7 @@ function UserMenu({
               {initials}
             </AvatarFallback>
           </Avatar>
-          <svg
-            width="10"
-            height="6"
-            viewBox="0 0 10 6"
-            fill="none"
-            className="opacity-70"
-          >
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" className="opacity-70">
             <path
               d="M1 1L5 5L9 1"
               stroke="currentColor"
@@ -335,10 +344,7 @@ function UserMenu({
             Profile Settings
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={logout}
-          className="text-red-500 cursor-pointer"
-        >
+        <DropdownMenuItem onClick={logout} className="text-red-500 cursor-pointer">
           Log out
         </DropdownMenuItem>
       </DropdownMenuContent>
