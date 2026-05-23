@@ -37,8 +37,11 @@ export default function AuditLogsPage() {
         (l) =>
           String(l.adminId).includes(search) ||
           String(l.targetUserId).includes(search) ||
-          l.path?.toLowerCase().includes(search.toLowerCase()) ||
-          l.method?.toLowerCase().includes(search.toLowerCase()),
+          l.endpoint?.toLowerCase().includes(search.toLowerCase()) ||
+          l.method?.toLowerCase().includes(search.toLowerCase()) ||
+          l.description?.toLowerCase().includes(search.toLowerCase()) ||
+          l.admin?.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+          l.targetUser?.displayName?.toLowerCase().includes(search.toLowerCase()),
       )
     : logs;
 
@@ -51,11 +54,11 @@ export default function AuditLogsPage() {
     },
     {
       key: "adminId",
-      header: "Admin ID",
-      render: (v) => (
-        <Badge variant="outline" className="font-mono text-xs">
-          Admin #{v}
-        </Badge>
+      header: "Admin",
+      render: (v, row) => (
+        <span className="font-medium">
+          {row.admin?.displayName ?? `Admin #${v}`}
+        </span>
       ),
     },
     {
@@ -64,7 +67,7 @@ export default function AuditLogsPage() {
       render: (v) => <MethodBadge method={v} />,
     },
     {
-      key: "path",
+      key: "endpoint",
       header: "Path",
       className: "max-w-[260px] truncate font-mono text-xs text-gray-500",
       render: (v) => (
@@ -76,7 +79,13 @@ export default function AuditLogsPage() {
     {
       key: "targetUserId",
       header: "Target User",
-      render: (v) => v ? `User #${v}` : "—",
+      render: (v, row) => row.targetUser?.displayName ?? (v ? `User #${v}` : "—"),
+    },
+    {
+      key: "description",
+      header: "Summary",
+      className: "text-gray-700",
+      render: (v) => v ?? "—",
     },
     {
       key: "createdAt",
@@ -98,7 +107,7 @@ export default function AuditLogsPage() {
         <div className="relative max-w-sm w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
-            placeholder="Search by admin ID, user ID or path..."
+            placeholder="Search logs..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-white border-gray-200"
