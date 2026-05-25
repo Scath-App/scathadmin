@@ -60,7 +60,7 @@ export default function SafeHavenAccountsPage() {
     { key: "accountName", header: "Name", className: "font-medium text-sm" },
     { key: "accountType", header: "Type", className: "text-sm text-gray-500" },
     {
-      key: "balance",
+      key: "accountBalance",
       header: "Balance",
       headerClassName: "text-right",
       render: (v) => <div className="text-right"><MoneyCell naira={v} /></div>,
@@ -140,7 +140,7 @@ export default function SafeHavenAccountsPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-0.5">Balance</p>
-              <MoneyCell naira={searchResult.balance} />
+              <MoneyCell naira={searchResult.accountBalance} />
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-0.5">Book Balance</p>
