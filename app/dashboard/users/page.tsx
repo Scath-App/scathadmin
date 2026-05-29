@@ -31,13 +31,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,12 +47,24 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 
+type AdminUser = {
+  id: number;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+  isEmailVerified?: boolean;
+  isVerified?: boolean;
+  phoneNumber?: string;
+  deletedAt?: string;
+};
+
 // ─── Schema ────────────────────────────────────────────────────────────────────
 
 const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6).max(128),
-  role: z.enum(["admin", "staff", "partner", "user"]),
+  role: z.literal("admin"),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
 });
@@ -146,12 +151,12 @@ export default function UsersPage() {
     queryFn: () => getUsers(page, LIMIT),
   });
 
-  const users: any[] = data?.data ?? (Array.isArray(data) ? data : []);
+  const users = (data?.data ?? (Array.isArray(data) ? data : [])) as AdminUser[];
   const meta = data?.meta ?? {};
 
   const filtered = search
     ? users.filter(
-        (u: any) =>
+        (u: AdminUser) =>
           u.email?.toLowerCase().includes(search.toLowerCase()) ||
           u.firstName?.toLowerCase().includes(search.toLowerCase()) ||
           u.lastName?.toLowerCase().includes(search.toLowerCase()),
@@ -169,17 +174,17 @@ export default function UsersPage() {
     queryFn: () => getDeletedUsers(deletedPage, LIMIT),
   });
 
-  const deletedUsers: any[] =
-    deletedData?.data ?? (Array.isArray(deletedData) ? deletedData : []);
+  const deletedUsers =
+    (deletedData?.data ?? (Array.isArray(deletedData) ? deletedData : [])) as AdminUser[];
   const deletedMeta = deletedData?.meta ?? {};
 
   // ── Create user mutation
   const form = useForm<z.infer<typeof createUserSchema>>({
-    resolver: zodResolver(createUserSchema) as any,
+    resolver: zodResolver(createUserSchema),
     defaultValues: {
       email: "",
       password: "",
-      role: "user",
+      role: "admin",
       firstName: "",
       lastName: "",
     },
@@ -189,16 +194,17 @@ export default function UsersPage() {
     mutationFn: (v: z.infer<typeof createUserSchema>) => createAdminUser(v),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast.success("User created.");
+      toast.success("Admin user created.");
       setIsCreateOpen(false);
       setConflictError("");
       form.reset();
     },
-    onError: (e: any) => {
-      if (e.response?.status === 409) {
+    onError: (e: unknown) => {
+      const err = e as { response?: { status?: number; data?: { message?: string } } };
+      if (err.response?.status === 409) {
         setConflictError("Email already exists.");
       } else {
-        toast.error(e.response?.data?.message ?? "Failed to create user.");
+        toast.error(err.response?.data?.message ?? "Failed to create admin user.");
       }
     },
   });
@@ -292,7 +298,7 @@ export default function UsersPage() {
             className="bg-blue hover:bg-darkBlue text-white gap-2"
             onClick={() => setIsCreateOpen(true)}
           >
-            <Plus className="w-4 h-4" /> Create User
+            <Plus className="w-4 h-4" /> Create Admin
           </Button>
         }
       />
@@ -424,7 +430,7 @@ export default function UsersPage() {
                 </div>
 
                 <div className="divide-y divide-gray-100">
-                  {deletedUsers.map((u: any) => {
+                  {deletedUsers.map((u: AdminUser) => {
                     const name =
                       u.firstName && u.lastName
                         ? `${u.firstName} ${u.lastName}`
@@ -565,7 +571,7 @@ export default function UsersPage() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Create User</DialogTitle>
+            <DialogTitle>Create Admin</DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form
@@ -632,38 +638,16 @@ export default function UsersPage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="partner">Partner</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <p className="text-sm text-gray-500">
+                This action creates an internal admin account. The role is fixed as
+                <span className="font-medium text-gray-900"> admin</span>.
+              </p>
               <Button
                 type="submit"
                 className="w-full bg-blue text-white"
                 disabled={createMutation.isPending}
               >
-                {createMutation.isPending ? "Creating..." : "Create User"}
+                {createMutation.isPending ? "Creating..." : "Create Admin"}
               </Button>
             </form>
           </Form>

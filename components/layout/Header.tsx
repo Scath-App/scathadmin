@@ -45,11 +45,14 @@ export function Header() {
   });
 
   const accounts = dashboardData?.data ?? [];
-  const adminAccount = accounts.find(
-    (a: any) => a.accountName === "THESCATHCOMPANIES"
+  const parentAccount = dashboardData?.summary?.parentAccount;
+  const adminAccount = parentAccount ?? accounts.find(
+    (a: any) => a.accountName?.toUpperCase().includes("THESCATHCOMPANIES")
   );
 
   const mainBalanceValue =
+    parentAccount?.balanceInNaira ??
+    Number(parentAccount?.balanceInKobo ?? adminAccount?.accountBalanceInKobo ?? 0) / 100 ??
     adminAccount?.balanceInNaira ??
     Number(adminAccount?.accountBalanceInKobo ?? 0) / 100;
   const mainBalance = mainBalanceValue.toLocaleString("en-NG", {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuditLogs } from "@/lib/userService";
+import { getAuditLogs, enrichAuditLog } from "@/lib/userService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -32,40 +32,7 @@ export default function AuditLogsPage() {
   const logs: any[] = data?.data ?? [];
   const meta = data?.meta ?? {};
 
-  const enrichedLogs = logs.map((l) => {
-    let targetUserId = l.targetUserId;
-    let desc = l.description;
-
-    if (!desc && l.endpoint) {
-      const match = l.endpoint.match(/\/admin\/users\/(\d+)(?=\/|$|\?)/);
-      const adminStr = l.admin?.displayName ?? `Admin #${l.adminId}`;
-
-      if (match) {
-        targetUserId = Number(match[1]);
-        const targetStr = l.targetUser?.displayName ?? `User #${targetUserId}`;
-        
-        if (l.endpoint.includes("/saveboxes")) desc = `${adminStr} viewed ${targetStr}'s saveboxes`;
-        else if (l.endpoint.includes("/transactions")) desc = `${adminStr} viewed ${targetStr}'s transactions`;
-        else if (l.endpoint.includes("/equity")) desc = `${adminStr} viewed ${targetStr}'s equity portfolio`;
-        else if (l.endpoint.includes("/investments")) desc = `${adminStr} viewed ${targetStr}'s investments`;
-        else desc = `${adminStr} viewed ${targetStr}'s profile`;
-      } else if (l.endpoint.includes("/admin/users/deleted")) {
-        desc = `${adminStr} viewed deleted users`;
-      } else if (l.endpoint.includes("/admin/users")) {
-        if (l.endpoint.includes("/audit/logs")) {
-          desc = `${adminStr} viewed audit logs`;
-        } else {
-          desc = `${adminStr} viewed users list`;
-        }
-      }
-    }
-
-    return {
-      ...l,
-      targetUserId,
-      description: desc,
-    };
-  });
+  const enrichedLogs = logs.map(enrichAuditLog);
 
   const filtered = search
     ? enrichedLogs.filter(

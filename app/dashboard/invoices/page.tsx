@@ -178,8 +178,12 @@ export default function InvoicesPage() {
         const isRunning =
           reopenMutation.isPending && reopenTarget?.id === id;
 
-        // Only show "Reopen" for paid invoices (admin only)
-        if (!isAdmin || row.status !== "paid") {
+        // Only show "Reopen" for manually settled paid invoices (admin only)
+        if (
+          !isAdmin ||
+          row.status !== "paid" ||
+          row.settlementMode !== "manual_external"
+        ) {
           return <div className="text-right text-xs text-gray-300">—</div>;
         }
 

@@ -81,13 +81,6 @@ export const navSections: NavSection[] = [
           { label: "Payouts", href: "/dashboard/finance/payouts", icon: ArrowRightLeft },
         ],
       },
-      {
-        label: "Invoices",
-        icon: FileText,
-        children: [
-          { label: "All Invoices", href: "/dashboard/invoices", icon: FileText },
-        ],
-      },
     ],
   },
 

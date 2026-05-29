@@ -24,6 +24,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   PieChart,
   Pie,
   Cell,
@@ -67,7 +75,7 @@ export default function TreasuryPage() {
   const [poolForm, setPoolForm] = useState({
     fromAccountNumber: "",
     toAccountNumber: "",
-    amountInKobo: "",
+    amountInNaira: "",
     reason: "",
   });
 
@@ -117,21 +125,26 @@ export default function TreasuryPage() {
   });
 
   const poolMutation = useMutation({
-    mutationFn: () =>
-      poolTransfer({
+    mutationFn: () => {
+      const amountInNaira = Number(poolForm.amountInNaira);
+      return poolTransfer({
         fromAccountNumber: poolForm.fromAccountNumber,
         toAccountNumber: poolForm.toAccountNumber,
-        amountInKobo: Number(poolForm.amountInKobo),
+        amountInKobo: Math.round(amountInNaira * 100),
         reason: poolForm.reason,
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["treasury-dashboard"] });
       toast.success("Pool transfer initiated.");
       setIsPoolOpen(false);
-      setPoolForm({ fromAccountNumber: "", toAccountNumber: "", amountInKobo: "", reason: "" });
+      setPoolForm({ fromAccountNumber: "", toAccountNumber: "", amountInNaira: "", reason: "" });
     },
     onError: (e: any) => toast.error(e.response?.data?.message ?? "Pool transfer failed."),
   });
+
+  const accountOptionLabel = (acct: any) =>
+    `${acct.accountName ?? acct.purpose ?? acct.accountNumber} — ${acct.accountNumber}`;
 
   const columns: Column[] = [
     {
@@ -360,32 +373,68 @@ export default function TreasuryPage() {
           </DialogHeader>
           <div className="space-y-4 pt-1">
             <div className="space-y-1.5">
-              <Label>From Account Number</Label>
-              <Input
-                placeholder="e.g. 0123456789"
+              <Label>From Account</Label>
+              <Select
                 value={poolForm.fromAccountNumber}
-                onChange={(e) => setPoolForm((p) => ({ ...p, fromAccountNumber: e.target.value }))}
-              />
+                onValueChange={(value) => setPoolForm((p) => ({ ...p, fromAccountNumber: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select sender account" />
+                </SelectTrigger>
+                <SelectContent className="w-full">
+                  <SelectGroup>
+                    {accounts.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        No accounts available
+                      </SelectItem>
+                    ) : (
+                      accounts.map((acct: any) => (
+                        <SelectItem key={acct.accountNumber} value={acct.accountNumber}>
+                          {accountOptionLabel(acct)}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>To Account Number</Label>
-              <Input
-                placeholder="e.g. 9876543210"
+              <Label>To Account</Label>
+              <Select
                 value={poolForm.toAccountNumber}
-                onChange={(e) => setPoolForm((p) => ({ ...p, toAccountNumber: e.target.value }))}
-              />
+                onValueChange={(value) => setPoolForm((p) => ({ ...p, toAccountNumber: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select receiver account" />
+                </SelectTrigger>
+                <SelectContent className="w-full">
+                  <SelectGroup>
+                    {accounts.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        No accounts available
+                      </SelectItem>
+                    ) : (
+                      accounts.map((acct: any) => (
+                        <SelectItem key={acct.accountNumber} value={acct.accountNumber}>
+                          {accountOptionLabel(acct)}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Amount (in Kobo)</Label>
+              <Label>Amount (in Naira)</Label>
               <Input
                 type="number"
-                placeholder="e.g. 100000 = ₦1,000"
-                value={poolForm.amountInKobo}
-                onChange={(e) => setPoolForm((p) => ({ ...p, amountInKobo: e.target.value }))}
+                placeholder="e.g. 1000 = ₦1,000"
+                value={poolForm.amountInNaira}
+                onChange={(e) => setPoolForm((p) => ({ ...p, amountInNaira: e.target.value }))}
               />
-              {poolForm.amountInKobo && (
+              {poolForm.amountInNaira && (
                 <p className="text-xs text-gray-400">
-                  ≈ {fmt(Number(poolForm.amountInKobo) / 100)}
+                  ≈ {fmt(Number(poolForm.amountInNaira))}
                 </p>
               )}
             </div>
@@ -411,7 +460,7 @@ export default function TreasuryPage() {
                   poolMutation.isPending ||
                   !poolForm.fromAccountNumber ||
                   !poolForm.toAccountNumber ||
-                  !poolForm.amountInKobo ||
+                  !poolForm.amountInNaira ||
                   !poolForm.reason
                 }
                 onClick={() => poolMutation.mutate()}

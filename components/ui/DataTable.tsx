@@ -65,18 +65,18 @@ export function DataTable<T = any>({
   const canNext = pagination ? displayPage < pagination.totalPages : false;
 
   return (
-    <div className={`overflow-hidden ${className ?? ""}`}>
+    <div className={`overflow-hidden bg-white ${className ?? ""}`}>
       {headerExtra && (
-        <div className="px-6 py-4 border-b border-gray-100">{headerExtra}</div>
+        <div className="px-6 py-4 border-b border-gray-100 bg-white">{headerExtra}</div>
       )}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow className="hover:bg-transparent bg-gray-50/80">
+            <TableRow className="hover:bg-transparent bg-gray-50 border-b border-gray-100">
               {columns.map((col) => (
                 <TableHead
                   key={col.key}
-                  className={`font-semibold text-gray-700 text-xs uppercase tracking-wide ${col.headerClassName ?? ""}`}
+                  className={`h-11 px-6 font-semibold text-gray-500 text-[11px] uppercase tracking-wider ${col.headerClassName ?? ""}`}
                 >
                   {col.header}
                 </TableHead>
@@ -86,9 +86,9 @@ export function DataTable<T = any>({
           <TableBody>
             {loading ? (
               Array.from({ length: skeletonRows }).map((_, i) => (
-                <TableRow key={i}>
+                <TableRow key={i} className="border-b border-gray-100">
                   {columns.map((col) => (
-                    <TableCell key={col.key}>
+                    <TableCell key={col.key} className="px-6 py-4">
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
                   ))}
@@ -98,20 +98,22 @@ export function DataTable<T = any>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="text-center text-gray-400 h-24 text-sm"
+                  className="text-center text-gray-400 py-16 text-sm"
                 >
-                  {emptyMessage}
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <p className="font-medium text-gray-500">{emptyMessage}</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
               data.map((row, index) => (
                 <TableRow
                   key={rowKey ? rowKey(row, index) : index}
-                  className={`hover:bg-gray-50/50 ${onRowClick ? "cursor-pointer" : ""}`}
+                  className={`border-b border-gray-100 hover:bg-gray-50/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                 >
                   {columns.map((col) => (
-                    <TableCell key={col.key} className={col.className}>
+                    <TableCell key={col.key} className={`px-6 py-3.5 ${col.className ?? ""}`}>
                       {col.render
                         ? col.render((row as any)[col.key], row, index)
                         : ((row as any)[col.key] ?? "—")}
@@ -125,10 +127,10 @@ export function DataTable<T = any>({
       </div>
 
       {pagination && pagination.totalPages > 1 && (
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-          <p className="text-xs text-gray-400">
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white">
+          <p className="text-xs font-medium text-gray-500">
             Page {displayPage} of {pagination.totalPages}
-            {pagination.total !== undefined && ` · ${pagination.total.toLocaleString()} total`}
+            {pagination.total !== undefined && <span className="text-gray-400 font-normal"> · {pagination.total.toLocaleString()} total</span>}
           </p>
           <div className="flex gap-2">
             <Button

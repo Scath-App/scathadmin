@@ -1,10 +1,11 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { useQueries } from "@tanstack/react-query";
-import { getUsers } from "@/lib/userService";
-import { getPendingPayouts, getAccountDashboard } from "@/lib/financeService";
-import { getAuditLogs } from "@/lib/userService";
+import { getPendingPayouts } from "@/lib/financeService";
+import { getAuditLogs, enrichAuditLog } from "@/lib/userService";
+import { getAdminAnalyticsOverview } from "@/lib/analyticsService";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,7 +17,7 @@ import {
 import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell, ResponsiveContainer,
+  PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import {
   Users, DollarSign, Clock, TrendingUp, ArrowRight,
@@ -32,42 +33,44 @@ export default function DashboardPage() {
 
   const results = useQueries({
     queries: [
-      { queryKey: ["users-count"], queryFn: () => getUsers(0, 1) },
+      { queryKey: ["analytics-overview"], queryFn: () => getAdminAnalyticsOverview("30d") },
       { queryKey: ["pendingPayouts-count"], queryFn: getPendingPayouts },
-      { queryKey: ["accountDashboard-overview"], queryFn: () => getAccountDashboard(0, 100) },
       { queryKey: ["auditLogs-recent"], queryFn: () => getAuditLogs(0, 10) },
     ],
   });
 
-  const [usersResult, payoutsResult, dashboardResult, logsResult] = results;
+  const [analyticsResult, payoutsResult, logsResult] = results;
 
-  const totalUsers = usersResult.data?.meta?.total ?? usersResult.data?.total ?? "—";
+  const analytics = analyticsResult.data;
+  const cards = analytics?.cards;
+  const charts = analytics?.charts;
+
+  const totalUsers = cards?.totalUsers ?? "—";
+  const totalDeletedUsers = cards?.totalDeletedUsers ?? "—";
   const pendingPayouts = Array.isArray(payoutsResult.data) ? payoutsResult.data : [];
   const pendingCount = pendingPayouts.length;
-  const summary = dashboardResult.data?.summary ?? {};
-  const treasuryBalance = summary.totalBalanceInNaira != null
-    ? `₦${Number(summary.totalBalanceInNaira).toLocaleString("en-NG", { minimumFractionDigits: 2 })}`
+
+  const treasuryBalance = cards?.mainAccountBalanceInNaira != null
+    ? `₦${Number(cards.mainAccountBalanceInNaira).toLocaleString("en-NG", { minimumFractionDigits: 2 })}`
+    : "—";
+    
+  const settledRevenue = cards?.settledRevenueInNaira != null
+    ? `₦${Number(cards.settledRevenueInNaira).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`
     : "—";
 
-  const accounts: any[] = dashboardResult.data?.data ?? [];
-  const recentLogs: any[] = logsResult.data?.data ?? [];
+  const accounts = charts?.treasuryByPurpose ?? [];
+  const recentLogs: any[] = (logsResult.data?.data ?? []).map(enrichAuditLog);
 
   // Chart data
-  const purposeData = accounts.reduce((acc: any[], account: any) => {
-    const purpose = account.purpose ?? "other";
-    const existing = acc.find((a) => a.name === purpose);
-    if (existing) {
-      existing.value += account.balanceInNaira ?? 0;
-    } else {
-      acc.push({ name: purpose, value: account.balanceInNaira ?? 0 });
-    }
-    return acc;
-  }, []);
+  const purposeData = accounts.map((account: any) => ({
+    name: account.purpose,
+    value: account.balanceInNaira,
+  }));
 
-  const balanceBarData = accounts.slice(0, 8).map((acc: any) => ({
-    name: (acc.accountName ?? "").slice(0, 12),
-    balance: acc.balanceInNaira ?? 0,
-    book: acc.bookBalanceInNaira ?? 0,
+  const userGrowthData = (charts?.userGrowth ?? []).map((d: any) => ({
+    date: d.bucket ? format(new Date(d.bucket), "dd MMM") : "",
+    "New Users": d.newUsers,
+    Deleted: d.deletedUsers,
   }));
 
   // ── Attention items ──────────────────────────────────────────────────────────
@@ -83,7 +86,7 @@ export default function DashboardPage() {
     },
     {
       label: "Platform Accounts",
-      count: dashboardResult.isLoading ? null : (summary.totalAccounts ?? accounts.length),
+      count: analyticsResult.isLoading ? null : accounts.length,
       href: "/dashboard/accounts",
       urgent: false,
       icon: BarChart3,
@@ -92,7 +95,7 @@ export default function DashboardPage() {
     },
     {
       label: "Total Users",
-      count: usersResult.isLoading ? null : totalUsers,
+      count: analyticsResult.isLoading ? null : totalUsers,
       href: "/dashboard/users",
       urgent: false,
       icon: Users,
@@ -153,15 +156,19 @@ export default function DashboardPage() {
 
       {/* ── Needs Attention strip ─────────────────────────────────────────── */}
       {!payoutsResult.isLoading && pendingCount > 0 && (
-        <div className="flex items-center gap-3 bg-yellow/10 border border-yellow/30 rounded-xl px-4 py-3">
-          <AlertCircle className="w-4 h-4 text-yellow shrink-0" />
-          <p className="text-sm font-medium text-yellow-800 flex-1">
-            <span className="font-bold">{pendingCount} payout{pendingCount !== 1 ? "s" : ""}</span>{" "}
+        <div className="relative group overflow-hidden bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200/60 shadow-[0_2px_10px_rgb(250,204,21,0.1)] rounded-2xl px-5 py-3.5 flex items-center gap-3 transition-all hover:shadow-[0_4px_20px_rgb(250,204,21,0.15)] hover:border-yellow-300/50">
+          <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-transparent pointer-events-none" />
+          <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-yellow-100/80 shrink-0">
+            <div className="absolute inset-0 rounded-full border border-yellow-400 animate-ping opacity-20" />
+            <AlertCircle className="w-4 h-4 text-yellow-600" />
+          </div>
+          <p className="text-sm font-medium text-yellow-900 flex-1 relative z-10">
+            <span className="font-bold text-yellow-700">{pendingCount} payout{pendingCount !== 1 ? "s" : ""}</span>{" "}
             awaiting approval
           </p>
           <Link
             href="/dashboard/finance/payouts"
-            className="flex items-center gap-1 text-xs font-semibold text-yellow hover:underline shrink-0"
+            className="flex items-center gap-1.5 text-xs font-semibold text-yellow-700 bg-white/60 hover:bg-white px-3 py-1.5 rounded-lg transition-colors relative z-10 backdrop-blur-sm"
           >
             Review <ChevronRight className="w-3.5 h-3.5" />
           </Link>
@@ -172,10 +179,45 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Total Users"
-          value={usersResult.isLoading ? "..." : String(totalUsers)}
+          value={analyticsResult.isLoading ? "..." : String(totalUsers)}
           icon={Users}
           colorClass="text-blue"
           iconBgClass="bg-faintSky"
+        />
+        <StatCard
+          title="Deleted Users"
+          value={analyticsResult.isLoading ? "..." : String(totalDeletedUsers)}
+          icon={AlertCircle}
+          colorClass="text-red-500"
+          iconBgClass="bg-red-50"
+        />
+        <StatCard
+          title="Treasury Balance"
+          value={analyticsResult.isLoading ? "..." : treasuryBalance}
+          icon={DollarSign}
+          colorClass="text-greeny"
+          iconBgClass="bg-greeny/10"
+        />
+        <StatCard
+          title="Settled Revenue"
+          value={analyticsResult.isLoading ? "..." : settledRevenue}
+          icon={TrendingUp}
+          colorClass="text-purple"
+          iconBgClass="bg-purple/10"
+        />
+        <StatCard
+          title="Unsettled Revenue"
+          value={analyticsResult.isLoading ? "..." : (cards?.unsettledRevenueInNaira != null ? `₦${cards.unsettledRevenueInNaira.toLocaleString("en-NG", { minimumFractionDigits: 0 })}` : "—")}
+          icon={Receipt}
+          colorClass="text-orange-500"
+          iconBgClass="bg-orange-50"
+        />
+        <StatCard
+          title="Rewards Balance"
+          value={analyticsResult.isLoading ? "..." : (cards?.rewardsBalance != null ? Number(cards.rewardsBalance).toLocaleString() : "—")}
+          icon={Briefcase}
+          colorClass="text-cyan-600"
+          iconBgClass="bg-cyan-50"
         />
         <StatCard
           title="Pending Payouts"
@@ -184,42 +226,40 @@ export default function DashboardPage() {
           colorClass="text-yellow"
           iconBgClass="bg-yellow/10"
         />
-        <StatCard
-          title="Treasury Balance"
-          value={dashboardResult.isLoading ? "..." : treasuryBalance}
-          icon={DollarSign}
-          colorClass="text-greeny"
-          iconBgClass="bg-greeny/10"
-        />
-        <StatCard
-          title="Platform Accounts"
-          value={dashboardResult.isLoading ? "..." : String(summary.totalAccounts ?? accounts.length)}
-          icon={TrendingUp}
-          colorClass="text-purple"
-          iconBgClass="bg-purple/10"
-        />
       </div>
 
       {/* ── Quick actions ─────────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           {quickActions.map((action) => (
             <Link key={action.href} href={action.href}>
               <div
-                className={`relative rounded-xl border px-4 py-4 flex flex-col gap-2 cursor-pointer transition-all hover:shadow-md ${action.color}`}
+                className={cn(
+                  "relative group overflow-hidden rounded-2xl border px-4 py-5 flex flex-col gap-3 cursor-pointer transition-all duration-300",
+                  "hover:-translate-y-1 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)]",
+                  action.color
+                )}
               >
+                {/* Subtle gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                
                 {action.badge != null && (
-                  <span className="absolute top-2 right-2 bg-yellow text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  <span className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shadow-sm shadow-red-500/30">
                     {action.badge}
                   </span>
                 )}
-                <action.icon className="w-5 h-5" />
-                <div>
-                  <p className="text-sm font-semibold leading-tight">{action.label}</p>
-                  <p className="text-[11px] opacity-70 mt-0.5 leading-tight hidden sm:block">{action.desc}</p>
+                <div className="flex items-center justify-between relative z-10">
+                  <div className="p-2.5 rounded-xl bg-white/60 backdrop-blur-sm shadow-sm ring-1 ring-white/50">
+                    <action.icon className="w-5 h-5" strokeWidth={2.5} />
+                  </div>
+                  <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" />
+                </div>
+                <div className="relative z-10 mt-1">
+                  <p className="text-sm font-bold tracking-tight leading-tight">{action.label}</p>
+                  <p className="text-[11px] opacity-75 mt-1 leading-tight hidden sm:block font-medium">{action.desc}</p>
                 </div>
               </div>
             </Link>
@@ -229,39 +269,54 @@ export default function DashboardPage() {
 
       {/* ── Charts row ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Account balance bar chart */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        {/* User Growth area chart */}
+        <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900">Account Balances</h3>
-            <Link href="/dashboard/finance/treasury">
+            <h3 className="font-bold text-gray-900">User Growth</h3>
+            <Link href="/dashboard/analytics">
               <Button variant="ghost" size="sm" className="text-blue text-xs">
-                View all <ArrowRight className="w-3 h-3 ml-1" />
+                View trends <ArrowRight className="w-3 h-3 ml-1" />
               </Button>
             </Link>
           </div>
-          {dashboardResult.isLoading ? (
+          {analyticsResult.isLoading ? (
             <Skeleton className="h-48 w-full" />
+          ) : userGrowthData.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">No data</div>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={balanceBarData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: any) => `₦${Number(v).toLocaleString("en-NG")}`} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="balance" fill="#074D97" name="Balance" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="book" fill="#93C1E6" name="Book Balance" radius={[4, 4, 0, 0]} />
-              </BarChart>
+              <AreaChart data={userGrowthData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="newUsersGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#074D97" stopOpacity={0.12} />
+                    <stop offset="95%" stopColor="#074D97" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="deletedGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#EA4335" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#EA4335" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af" }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af" }} allowDecimals={false} />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: "#fff", border: "1px solid #f0f0f0", borderRadius: "10px", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", fontSize: "12px", padding: "10px 14px"
+                  }} 
+                />
+                <Area type="monotone" dataKey="New Users" stroke="#074D97" strokeWidth={2} fill="url(#newUsersGrad)" dot={false} activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="Deleted" stroke="#EA4335" strokeWidth={1.5} strokeDasharray="5 3" fill="url(#deletedGrad)" dot={false} activeDot={{ r: 4 }} />
+              </AreaChart>
             </ResponsiveContainer>
           )}
         </div>
 
         {/* Balance distribution pie chart */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-900">Balance by Purpose</h3>
           </div>
-          {dashboardResult.isLoading ? (
+          {analyticsResult.isLoading ? (
             <Skeleton className="h-48 w-full" />
           ) : purposeData.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-400 text-sm">No data</div>
@@ -297,8 +352,8 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Recent Audit Logs ─────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/30">
           <div>
             <h3 className="font-bold text-gray-900">Recent Activity</h3>
             <p className="text-xs text-gray-400 mt-0.5">Last 10 admin audit log entries</p>
@@ -310,8 +365,8 @@ export default function DashboardPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent bg-gray-50/80">
-                {["Admin", "Action", "Target User", "Path", "Time"].map((h) => (
+              <TableRow className="hover:bg-transparent bg-gray-50/80 border-b-gray-100/80">
+                {["Admin", "Action", "Target User", "Summary", "Time"].map((h) => (
                   <TableHead key={h} className="font-semibold text-gray-700 text-xs uppercase tracking-wide">
                     {h}
                   </TableHead>
@@ -338,20 +393,20 @@ export default function DashboardPage() {
                 </TableRow>
               ) : (
                 recentLogs.map((log: any) => (
-                  <TableRow key={log.id} className="hover:bg-gray-50/50">
+                  <TableRow key={log.id} className="hover:bg-gray-50/80 transition-colors border-b-gray-100/60">
                     <TableCell>
                       <Badge variant="outline" className="font-mono text-xs text-gray-600">
-                        Admin #{log.adminId}
+                        {log.admin?.displayName ?? `Admin #${log.adminId}`}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={log.method ?? "GET"} />
                     </TableCell>
                     <TableCell className="text-sm text-gray-700">
-                      {log.targetUserId ? `User #${log.targetUserId}` : "—"}
+                      {log.targetUser?.displayName ?? (log.targetUserId ? `User #${log.targetUserId}` : "—")}
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-gray-400 max-w-[200px] truncate">
-                      {log.path}
+                    <TableCell className="text-sm text-gray-600 max-w-[200px] truncate" title={log.description ?? log.endpoint ?? log.path}>
+                      {log.description ?? log.endpoint ?? log.path}
                     </TableCell>
                     <TableCell className="text-xs text-gray-400">
                       {log.createdAt ? format(new Date(log.createdAt), "dd MMM, HH:mm") : "—"}

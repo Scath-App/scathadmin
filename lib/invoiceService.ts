@@ -47,10 +47,23 @@ export const getInvoice = async (id: string | number) => {
 };
 
 /**
+ * GET /admin/users/:userId/invoices — user-scoped invoice list for admin
+ */
+export const getUserInvoices = async (
+  userId: number,
+  params?: { page?: number; limit?: number; status?: string },
+) => {
+  const response = await api.get(`admin/users/${userId}/invoices`, { params });
+  return response.data;
+};
+
+/**
  * POST /admin/invoices/:id/reopen-paid
  * Returns updated invoice with status, settlementMode: null, paidAt: null
  */
 export const reopenPaidInvoice = async (id: string | number, reason: string) => {
-  const response = await api.post(`admin/invoices/${id}/reopen-paid`, { reason });
+  const response = await api.post(`admin/invoices/${id}/reopen-paid`, {
+    reason: reason.trim(),
+  });
   return response.data;
 };

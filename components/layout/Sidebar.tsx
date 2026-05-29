@@ -36,8 +36,12 @@ export function Sidebar() {
   const toggleGroup = (label: string) =>
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
 
-  const isItemActive = (href: string) =>
-    pathname === href || (pathname.startsWith(href + "/") && href !== "/dashboard");
+  // Leaf items: exact match only — prevents /dashboard/fees also matching /dashboard/fees/revenue
+  const isItemActive = (href: string) => pathname === href;
+
+  // Group button: active if any child is active (used for styling the parent, not children)
+  const isGroupHighlighted = (group: NavGroup) =>
+    group.children.some((c) => pathname === c.href || pathname.startsWith(c.href + "/"));
 
   return (
     <div className="hidden lg:flex w-[280px] flex-col bg-white border-r border-gray-100 h-screen fixed top-0 left-0 m-3 rounded-3xl shadow-sm z-40 overflow-hidden">
@@ -101,7 +105,7 @@ export function Sidebar() {
               {/* Groups */}
               <div className="space-y-0.5">
                 {visibleGroups.map((group) => {
-                  const isGroupActive = group.children.some((c) => isItemActive(c.href));
+                  const isGroupActive = isGroupHighlighted(group);
                   const isOpen = openGroups[group.label];
 
                   // If only one child and its label matches group, render as flat item

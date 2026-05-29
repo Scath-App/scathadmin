@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -116,7 +116,9 @@ export default function AccountsPage() {
     mutationFn: syncAllAccounts,
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      setSyncAllResult(res);
+      const result = res && Object.keys(res).length > 0 ? res : { started: true };
+      setSyncAllResult(result);
+      toast.success("Sync started.");
     },
     onError: (e: any) => toast.error(e.response?.data?.message ?? "Sync all failed."),
   });
@@ -274,6 +276,9 @@ export default function AccountsPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Create Main Account</DialogTitle>
+            <DialogDescription>
+              Create a new platform account and assign a purpose, suffix, and metadata.
+            </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit((v) => createMutation.mutate(v))} className="space-y-4 pt-2">
@@ -325,33 +330,46 @@ export default function AccountsPage() {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Sync All Results</DialogTitle>
+              <DialogDescription>
+                {syncAllResult.started
+                  ? "The sync request was accepted. Account updates should appear shortly."
+                  : "View the latest sync counts and any error details from the request."}
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg bg-gray-50 p-3 text-center">
-                  <p className="text-xl font-bold text-gray-900">{syncAllResult.total ?? "—"}</p>
-                  <p className="text-xs text-gray-500">Total</p>
+              {syncAllResult.started ? (
+                <div className="rounded-lg bg-blue/5 border border-blue/20 p-4 text-sm text-blue">
+                  Sync has started successfully. Reload the page or wait a moment for updated balances.
                 </div>
-                <div className="rounded-lg bg-greeny/5 p-3 text-center">
-                  <p className="text-xl font-bold text-greeny">{syncAllResult.successful ?? "—"}</p>
-                  <p className="text-xs text-gray-500">Successful</p>
-                </div>
-                <div className="rounded-lg bg-red/5 p-3 text-center">
-                  <p className="text-xl font-bold text-red">{syncAllResult.failed ?? "—"}</p>
-                  <p className="text-xs text-gray-500">Failed</p>
-                </div>
-              </div>
-              {syncAllResult.errors?.length > 0 && (
-                <div className="rounded-lg border border-red/20 overflow-hidden">
-                  <p className="px-3 py-2 text-xs font-semibold text-red bg-red/5 border-b border-red/10">Errors</p>
-                  <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
-                    {syncAllResult.errors.map((err: any, i: number) => (
-                      <div key={i} className="px-3 py-2 text-xs text-gray-600">
-                        <span className="font-mono text-red">{err.accountNumber}</span>: {err.message}
-                      </div>
-                    ))}
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-lg bg-gray-50 p-3 text-center">
+                      <p className="text-xl font-bold text-gray-900">{syncAllResult.total ?? "—"}</p>
+                      <p className="text-xs text-gray-500">Total</p>
+                    </div>
+                    <div className="rounded-lg bg-greeny/5 p-3 text-center">
+                      <p className="text-xl font-bold text-greeny">{syncAllResult.successful ?? "—"}</p>
+                      <p className="text-xs text-gray-500">Successful</p>
+                    </div>
+                    <div className="rounded-lg bg-red/5 p-3 text-center">
+                      <p className="text-xl font-bold text-red">{syncAllResult.failed ?? "—"}</p>
+                      <p className="text-xs text-gray-500">Failed</p>
+                    </div>
                   </div>
-                </div>
+                  {syncAllResult.errors?.length > 0 && (
+                    <div className="rounded-lg border border-red/20 overflow-hidden">
+                      <p className="px-3 py-2 text-xs font-semibold text-red bg-red/5 border-b border-red/10">Errors</p>
+                      <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                        {syncAllResult.errors.map((err: any, i: number) => (
+                          <div key={i} className="px-3 py-2 text-xs text-gray-600">
+                            <span className="font-mono text-red">{err.accountNumber}</span>: {err.message}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               <Button className="w-full" variant="outline" onClick={() => setSyncAllResult(null)}>Close</Button>
             </div>

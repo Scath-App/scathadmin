@@ -22,7 +22,7 @@ export const getUserById = async (userId: number) => {
 export const createAdminUser = async (data: {
   email: string;
   password: string;
-  role: string;
+  role: "admin";
   firstName?: string;
   lastName?: string;
 }) => {
@@ -44,8 +44,36 @@ export const updateUser = async (
   return response.data;
 };
 
-export const sendCoins = async (userId: number, data: { amount: number; description?: string }) => {
-  const response = await api.post(`admin/rewards/send/${userId}`, data);
+export const updateUserRole = async (
+  userId: number,
+  data: { role: "admin" | "partner" },
+) => {
+  const response = await api.patch(`admin/users/${userId}/role`, data);
+  return response.data;
+};
+
+export const sendCoins = async (recipientUserId: number, data: { amount: number; description?: string }) => {
+  const response = await api.post(`admin/rewards/send`, { recipientUserId, ...data });
+  return response.data;
+};
+
+// ─── Search Users ──────────────────────────────────────────────────────────────
+
+export interface UserSearchResult {
+  id: number;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string | null;
+  role: string;
+  displayName: string;
+  matchedAccountNumber: string | null;
+}
+
+export const searchUsers = async (q: string, limit = 10): Promise<UserSearchResult[]> => {
+  const response = await api.get("admin/users/search", {
+    params: { q, limit },
+  });
   return response.data;
 };
 
@@ -57,6 +85,41 @@ export const getAuditLogs = async (page = 0, limit = 20) => {
   });
   return response.data;
 };
+
+export function enrichAuditLog(l: any) {
+  let targetUserId = l.targetUserId;
+  let desc = l.description;
+
+  if (!desc && l.endpoint) {
+    const match = l.endpoint.match(/\/admin\/users\/(\d+)(?=\/|$|\?)/);
+    const adminStr = l.admin?.displayName ?? `Admin #${l.adminId}`;
+
+    if (match) {
+      targetUserId = Number(match[1]);
+      const targetStr = l.targetUser?.displayName ?? `User #${targetUserId}`;
+      
+      if (l.endpoint.includes("/saveboxes")) desc = `${adminStr} viewed ${targetStr}'s saveboxes`;
+      else if (l.endpoint.includes("/transactions")) desc = `${adminStr} viewed ${targetStr}'s transactions`;
+      else if (l.endpoint.includes("/equity")) desc = `${adminStr} viewed ${targetStr}'s equity portfolio`;
+      else if (l.endpoint.includes("/investments")) desc = `${adminStr} viewed ${targetStr}'s investments`;
+      else desc = `${adminStr} viewed ${targetStr}'s profile`;
+    } else if (l.endpoint.includes("/admin/users/deleted")) {
+      desc = `${adminStr} viewed deleted users`;
+    } else if (l.endpoint.includes("/admin/users")) {
+      if (l.endpoint.includes("/audit/logs")) {
+        desc = `${adminStr} viewed audit logs`;
+      } else {
+        desc = `${adminStr} viewed users list`;
+      }
+    }
+  }
+
+  return {
+    ...l,
+    targetUserId,
+    description: desc,
+  };
+}
 
 // ─── Per-User Data ─────────────────────────────────────────────────────────────
 

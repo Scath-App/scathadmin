@@ -39,7 +39,7 @@ export const syncSingleAccount = async (accountId: number | string) => {
 /** POST /admin/accounts/sync */
 export const syncAllAccounts = async () => {
   const response = await api.post("admin/accounts/sync");
-  return response.data;
+  return response.data ?? {};
 };
 
 // ─── SafeHaven Accounts ────────────────────────────────────────────────────────
@@ -70,11 +70,17 @@ export const getAccountByNumberSafeHaven = async (
 
 export const getFees = async () => {
   try {
-    const response = await api.get("admin/fees");
+    const response = await api.get("admin/fees", { params: { limit: 100, page: 0 } });
     return response.data;
   } catch (_e) {
     return [];
   }
+};
+
+/** POST /admin/fees */
+export const createFee = async (data: object) => {
+  const response = await api.post("admin/fees", data);
+  return response.data;
 };
 
 /** PATCH /admin/fees/:id — use this, NOT the deprecated PUT /markup */

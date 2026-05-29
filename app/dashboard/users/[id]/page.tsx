@@ -11,7 +11,21 @@ import {
   getUserAccounts,
   getUserById,
   updateUser,
+  updateUserRole,
 } from "@/lib/userService";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { getUserInvoices, reopenPaidInvoice, Invoice } from "@/lib/invoiceService";
+
+type AnyRecord = Record<string, unknown>;
+
+type UserProfile = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phoneNumber?: string;
+  role?: string;
+};
+
 import {
   Dialog,
   DialogContent,
@@ -170,8 +184,8 @@ export default function UserDetailPage() {
   // Pagination state
   const [invPage, setInvPage] = useState(0);
   const [txPage, setTxPage] = useState(0);
-  const [sbPage, setSbPage] = useState(0);
-  const [eqPage, setEqPage] = useState(0);
+  const [sbPage] = useState(0);
+  const [eqPage] = useState(0);
   const [invStatus, setInvStatus] = useState<string>("");
 
   // ─── Profile query ────────────────────────────────────────────────────────
@@ -181,11 +195,11 @@ export default function UserDetailPage() {
     enabled: !!userId,
   });
 
-  const profile: any = profileData?.data ?? profileData ?? {};
+  const profile: UserProfile = profileData?.data ?? profileData ?? {};
 
   // ─── Edit form ────────────────────────────────────────────────────────────
   const editForm = useForm<z.infer<typeof editUserSchema>>({
-    resolver: zodResolver(editUserSchema) as any,
+    resolver: zodResolver(editUserSchema),
     values: {
       firstName: profile.firstName ?? "",
       lastName: profile.lastName ?? "",
@@ -196,16 +210,64 @@ export default function UserDetailPage() {
   });
 
   // ─── Update mutation ─────────────────────────────────────────────────────
+  type EditUserPayload = {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phoneNumber?: string;
+    role?: string;
+  };
+
   const updateMutation = useMutation({
-    mutationFn: (v: z.infer<typeof editUserSchema>) => updateUser(userId, v),
+    mutationFn: async (v: z.infer<typeof editUserSchema>) => {
+      const updates: EditUserPayload = {
+        firstName: v.firstName,
+        lastName: v.lastName,
+        email: v.email,
+        phoneNumber: v.phoneNumber,
+      };
+
+      const roleChanged =
+        v.role && v.role.toLowerCase() !== profile.role?.toLowerCase();
+      if (roleChanged && ["admin", "partner"].includes(v.role.toLowerCase())) {
+        await updateUserRole(userId, { role: v.role.toLowerCase() as "admin" | "partner" });
+      }
+
+      const hasProfileUpdates =
+        updates.firstName !== profile.firstName ||
+        updates.lastName !== profile.lastName ||
+        updates.email !== profile.email ||
+        updates.phoneNumber !== profile.phoneNumber;
+
+      if (hasProfileUpdates) {
+        await updateUser(userId, updates);
+      }
+    },
     onSuccess: () => {
       toast.success("User details updated.");
       setIsEditOpen(false);
       queryClient.invalidateQueries({ queryKey: ["userProfile", userId] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (e: any) => {
-      toast.error(e.response?.data?.message ?? "Failed to update user.");
+    onError: (e: unknown) => {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message ?? "Failed to update user.");
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      reopenPaidInvoice(id, reason),
+    onSuccess: (updated: Invoice) => {
+      toast.success(
+        `Invoice ${updated.invoiceNumber ?? `#${updated.id}`} reopened — now ${updated.status}.`,
+      );
+      setReopenTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["userInvoices", userId] });
+    },
+    onError: (e: unknown) => {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message ?? "Failed to reopen invoice.");
     },
   });
 
@@ -215,9 +277,28 @@ export default function UserDetailPage() {
     enabled: !!userId,
   });
 
-  const userAccounts: any[] = Array.isArray(accountsData)
+  const userAccounts = (Array.isArray(accountsData)
     ? accountsData
-    : accountsData?.data ?? [];
+    : accountsData?.data ?? []) as AnyRecord[];
+
+  const [invoicePage, setInvoicePage] = useState(0);
+  const [invoiceStatus, setInvoiceStatus] = useState("");
+  const [reopenTarget, setReopenTarget] = useState<Invoice | null>(null);
+
+  const { data: invoiceData, isLoading: invoiceLoading } = useQuery({
+    queryKey: ["userInvoices", userId, invoicePage, invoiceStatus],
+    queryFn: () =>
+      getUserInvoices(userId, {
+        page: invoicePage,
+        limit: PAGE_LIMIT,
+        status: invoiceStatus || undefined,
+      }),
+    enabled: !!userId,
+  });
+
+  const invoices: Invoice[] =
+    invoiceData?.data ?? (Array.isArray(invoiceData) ? invoiceData : []);
+  const invoiceMeta = invoiceData?.meta ?? {};
 
   // ─── Queries ──────────────────────────────────────────────────────────────
 
@@ -254,23 +335,19 @@ export default function UserDetailPage() {
 
   // ─── Derived data ─────────────────────────────────────────────────────────
 
-  const investments: any[] = invData?.data || [];
+  const investments = (invData?.data || []) as AnyRecord[];
   const invMeta = invData?.meta || {};
   const invSummary = invData?.summary || {};
 
-  const transactions: any[] = txData?.data || [];
+  const transactions = (txData?.data || []) as AnyRecord[];
   const txMeta = txData?.meta || {};
 
-  const saveboxes: any[] =
-    sbData?.data || Array.isArray(sbData)
-      ? (Array.isArray(sbData) ? sbData : sbData?.data) || []
-      : [];
+  const saveboxes =
+    (sbData?.data || (Array.isArray(sbData) ? sbData : sbData?.data) || []) as AnyRecord[];
   const sbTotal = sbData?.total ?? saveboxes.length;
 
-  const equities: any[] =
-    eqData?.data || Array.isArray(eqData)
-      ? (Array.isArray(eqData) ? eqData : eqData?.data) || []
-      : [];
+  const equities =
+    (eqData?.data || (Array.isArray(eqData) ? eqData : eqData?.data) || []) as AnyRecord[];
   const eqTotal = eqData?.total ?? equities.length;
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -289,8 +366,8 @@ export default function UserDetailPage() {
           Back to Users
         </Button>
       </div>
-      <div className="flex items-center justify-between gap-4">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
           {profileLoading ? (
             <Skeleton className="h-7 w-48 mb-1" />
           ) : (
@@ -308,7 +385,52 @@ export default function UserDetailPage() {
               {profile.phoneNumber && (
                 <span className="ml-3 text-gray-400">{profile.phoneNumber}</span>
               )}
+              {profile.role && (
+                <Badge variant="outline" className="ml-3 text-xs capitalize border-gray-200 text-gray-500">
+                  {profile.role}
+                </Badge>
+              )}
             </p>
+          )}
+
+          {/* ── Linked Platform Accounts ─────────────────────────────── */}
+          {!accountsLoading && userAccounts.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {userAccounts.map((acc: AnyRecord) => (
+                <div
+                  key={acc.id as string | number}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-100 rounded-lg shadow-sm text-xs"
+                >
+                  <span className="font-mono text-gray-600 font-medium">
+                    {acc.accountNumber ?? "—"}
+                  </span>
+                  {acc.accountName && (
+                    <span className="text-gray-400">· {acc.accountName}</span>
+                  )}
+                  {acc.accountType && (
+                    <span className="text-gray-300">· {acc.accountType}</span>
+                  )}
+                  {acc.status && (
+                    <Badge
+                      variant="outline"
+                      className={
+                        String(acc.status).toLowerCase() === "active"
+                          ? "text-greeny border-greeny/30 bg-greeny/5 text-[10px] py-0 px-1.5"
+                          : "text-gray-400 border-gray-200 text-[10px] py-0 px-1.5"
+                      }
+                    >
+                      {acc.status}
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {accountsLoading && (
+            <div className="mt-3 flex gap-2">
+              <Skeleton className="h-7 w-40 rounded-lg" />
+              <Skeleton className="h-7 w-32 rounded-lg" />
+            </div>
           )}
         </div>
         <Button
@@ -323,13 +445,13 @@ export default function UserDetailPage() {
       </div>
 
       <Tabs defaultValue="investments" className="w-full">
-        <TabsList className="bg-gray-100 p-1 rounded-xl w-full max-w-[600px] grid grid-cols-5">
+        <TabsList className="bg-gray-100 p-1 rounded-xl w-full max-w-4xl grid grid-cols-5 gap-1">
           {[
             { value: "investments", label: "Investments" },
             { value: "transactions", label: "Transactions" },
+            { value: "invoices", label: "Invoices" },
             { value: "saveboxes", label: "Saveboxes" },
             { value: "equity", label: "Equity" },
-            { value: "accounts", label: "Accounts" },
           ].map((t) => (
             <TabsTrigger
               key={t.value}
@@ -379,7 +501,7 @@ export default function UserDetailPage() {
                 setInvPage(0);
               }}
             >
-              <SelectTrigger className="w-[160px] bg-white border-gray-200 text-sm">
+              <SelectTrigger className="w-40 bg-white border-gray-200 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -431,10 +553,10 @@ export default function UserDetailPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  investments.map((inv: any) => (
-                    <TableRow key={inv.id} className="hover:bg-gray-50/50">
+                  investments.map((inv: AnyRecord) => (
+                    <TableRow key={inv.id as string | number} className="hover:bg-gray-50/50">
                       <TableCell className="font-mono text-xs text-gray-500">
-                        #{inv.id}
+                        #{inv.id as string | number}
                       </TableCell>
                       <TableCell className="font-semibold text-gray-900 text-sm">
                         {inv.amountInKobo != null ? fmt(inv.amountInKobo) : "—"}
@@ -526,12 +648,12 @@ export default function UserDetailPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  transactions.map((tx: any) => (
+                  transactions.map((tx: AnyRecord) => (
                     <TableRow
                       key={tx.reference}
                       className="hover:bg-gray-50/50"
                     >
-                      <TableCell className="font-mono text-xs text-gray-500 max-w-[160px] truncate">
+                      <TableCell className="font-mono text-xs text-gray-500 max-w-40 truncate">
                         {tx.reference}
                         {tx.metadata?.payoutRequestId && (
                           <span className="block text-blue text-[10px]">
@@ -556,7 +678,7 @@ export default function UserDetailPage() {
                       >
                         {tx.amountInKobo != null ? fmt(tx.amountInKobo) : "—"}
                       </TableCell>
-                      <TableCell className="text-xs text-gray-500 max-w-[200px] truncate">
+                      <TableCell className="text-xs text-gray-500 max-w-50 truncate">
                         {tx.description || tx.narration || "—"}
                       </TableCell>
                       <TableCell>
@@ -590,6 +712,155 @@ export default function UserDetailPage() {
               onPrev={() => setTxPage((p) => Math.max(0, p - 1))}
               onNext={() => setTxPage((p) => p + 1)}
             />
+          </div>
+        </TabsContent>
+
+        {/* ─── INVOICES TAB ─────────────────────────────────────────────── */}
+        <TabsContent value="invoices" className="mt-6">
+          <div className="space-y-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900">Invoices</h4>
+                <p className="text-sm text-gray-500">
+                  View invoices for this user and reopen manually settled paid invoices.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-600">Status:</label>
+                <Select
+                  value={invoiceStatus || "ALL"}
+                  onValueChange={(v) => {
+                    setInvoiceStatus(v === "ALL" ? "" : v);
+                    setInvoicePage(0);
+                  }}
+                >
+                  <SelectTrigger className="w-44 bg-white border-gray-200 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent bg-gray-50/80">
+                    <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide">
+                      Invoice
+                    </TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide">
+                      Amount
+                    </TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide">
+                      Status
+                    </TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide">
+                      Due Date
+                    </TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide">
+                      Paid At
+                    </TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide text-right">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invoiceLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell colSpan={6}>
+                          <Skeleton className="h-4 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : invoices.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center text-gray-400 h-24 text-sm"
+                      >
+                        No invoices found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    invoices.map((invoice) => {
+                      const canReopen =
+                        invoice.status === "paid" &&
+                        invoice.settlementMode === "manual_external";
+                      const isRunning =
+                        reopenMutation.isPending && reopenTarget?.id === invoice.id;
+
+                      return (
+                        <TableRow key={invoice.id} className="hover:bg-gray-50/50">
+                          <TableCell className="font-medium text-sm text-gray-900">
+                            {invoice.invoiceNumber ?? `#${invoice.id}`}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-900">
+                            {invoice.total != null ? fmt(invoice.total) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={
+                                invoice.status === "paid"
+                                  ? "text-blue border-blue/20 bg-faintSky text-xs capitalize"
+                                  : invoice.status === "overdue"
+                                    ? "text-red border-red/20 bg-red/5 text-xs capitalize"
+                                    : "text-gray-400 border-gray-200 text-xs capitalize"
+                              }
+                            >
+                              {invoice.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500">
+                            {invoice.dueDate
+                              ? format(new Date(invoice.dueDate), "dd MMM yyyy")
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500">
+                            {invoice.paidAt
+                              ? format(new Date(invoice.paidAt), "dd MMM yyyy")
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {canReopen ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-300 gap-1.5 whitespace-nowrap"
+                                disabled={isRunning}
+                                onClick={() => setReopenTarget(invoice)}
+                              >
+                                {isRunning ? "Reopening…" : "Reopen"}
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-gray-300">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+              <PaginationBar
+                page={invoicePage}
+                totalPages={invoiceMeta.totalPages ?? 1}
+                total={invoiceMeta.total ?? invoices.length}
+                onPrev={() => setInvoicePage((p) => Math.max(0, p - 1))}
+                onNext={() => setInvoicePage((p) => p + 1)}
+              />
+            </div>
           </div>
         </TabsContent>
 
@@ -643,7 +914,7 @@ export default function UserDetailPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  saveboxes.map((sb: any) => (
+                  saveboxes.map((sb: AnyRecord) => (
                     <TableRow key={sb.id} className="hover:bg-gray-50/50">
                       <TableCell className="font-mono text-xs text-gray-500">
                         #{sb.id}
@@ -735,7 +1006,7 @@ export default function UserDetailPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  equities.map((eq: any) => (
+                  equities.map((eq: AnyRecord) => (
                     <TableRow key={eq.id} className="hover:bg-gray-50/50">
                       <TableCell className="font-mono text-xs text-gray-500">
                         #{eq.id}
@@ -776,56 +1047,31 @@ export default function UserDetailPage() {
           </div>
         </TabsContent>
 
-        {/* ─── ACCOUNTS TAB ─────────────────────────────────────────────── */}
-        <TabsContent value="accounts" className="mt-6">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h4 className="font-semibold text-gray-900">
-                Platform Accounts{" "}
-                <span className="text-gray-400 font-normal text-sm">
-                  ({userAccounts.length} linked)
-                </span>
-              </h4>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent bg-gray-50/80">
-                  {["Account Number", "Name", "Type", "Balance", "Status"].map((h) => (
-                    <TableHead key={h} className="font-semibold text-gray-700 text-xs uppercase tracking-wide">{h}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {accountsLoading ? (
-                  Array.from({ length: 3 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={5}><Skeleton className="h-4 w-full" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : userAccounts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-gray-400 h-20 text-sm">
-                      No platform accounts linked.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  userAccounts.map((acc: any) => (
-                    <TableRow key={acc.id} className="hover:bg-gray-50/50">
-                      <TableCell className="font-mono text-sm">{acc.accountNumber ?? "—"}</TableCell>
-                      <TableCell className="font-medium text-sm text-gray-900">{acc.accountName ?? "—"}</TableCell>
-                      <TableCell className="text-sm text-gray-500">{acc.accountType ?? "—"}</TableCell>
-                      <TableCell className="font-semibold text-sm text-gray-900">
-                        {acc.balanceInNaira != null ? `₦${Number(acc.balanceInNaira).toLocaleString("en-NG", { minimumFractionDigits: 2 })}` : acc.balance != null ? fmt(acc.balance) : "—"}
-                      </TableCell>
-                      <TableCell>{acc.status ?? "—"}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
       </Tabs>
+
+      <ConfirmModal
+        open={!!reopenTarget}
+        onOpenChange={(v) => {
+          if (!v && !reopenMutation.isPending) setReopenTarget(null);
+        }}
+        title="Reopen paid invoice"
+        message={
+          reopenTarget
+            ? `This will reverse the manual settlement for ${reopenTarget.invoiceNumber ?? `invoice #${reopenTarget.id}`} and set it back to Sent or Overdue. This action cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Reopen invoice"
+        cancelLabel="Cancel"
+        reasonField
+        reasonLabel="Reason for reopening"
+        reasonRequired
+        loading={reopenMutation.isPending}
+        onConfirm={(reason) => {
+          if (reopenTarget && reason) {
+            reopenMutation.mutate({ id: reopenTarget.id, reason });
+          }
+        }}
+      />
 
       {/* ── Edit User Modal ─────────────────────────────────────────────────── */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) editForm.reset(); }}>
