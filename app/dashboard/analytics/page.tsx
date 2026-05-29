@@ -291,7 +291,7 @@ export default function AnalyticsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" vertical={false} />
                 <XAxis dataKey="serviceType" axisLine={false} tickLine={false} tick={{ fill: "#9ca3af", fontSize: 10 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9ca3af", fontSize: 11 }} tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={TooltipStyle} formatter={(v: number) => nairaFmt(v)} cursor={{ fill: "#f9fafb" }} />
+                <Tooltip contentStyle={TooltipStyle} formatter={(v: number | undefined) => nairaFmt(v ?? 0)} cursor={{ fill: "#f9fafb" }} />
                 <Legend
                   wrapperStyle={{ fontSize: 11, paddingTop: 12 }}
                   formatter={(val) => <span style={{ color: "#6b7280" }}>{val}</span>}

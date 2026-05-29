@@ -52,9 +52,10 @@ export function Header() {
 
   const mainBalanceValue =
     parentAccount?.balanceInNaira ??
-    Number(parentAccount?.balanceInKobo ?? adminAccount?.accountBalanceInKobo ?? 0) / 100 ??
+    (parentAccount?.balanceInKobo != null ? Number(parentAccount.balanceInKobo) / 100 : undefined) ??
     adminAccount?.balanceInNaira ??
-    Number(adminAccount?.accountBalanceInKobo ?? 0) / 100;
+    (adminAccount?.accountBalanceInKobo != null ? Number(adminAccount.accountBalanceInKobo) / 100 : undefined) ??
+    0;
   const mainBalance = mainBalanceValue.toLocaleString("en-NG", {
     minimumFractionDigits: 2,
   });

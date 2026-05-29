@@ -205,7 +205,7 @@ export default function UserDetailPage() {
       lastName: profile.lastName ?? "",
       email: profile.email ?? "",
       phoneNumber: profile.phoneNumber ?? "",
-      role: profile.role?.toLowerCase() ?? "user",
+      role: (profile.role?.toLowerCase() ?? "user") as "user" | "admin" | "partner" | "staff",
     },
   });
 
@@ -229,8 +229,8 @@ export default function UserDetailPage() {
 
       const roleChanged =
         v.role && v.role.toLowerCase() !== profile.role?.toLowerCase();
-      if (roleChanged && ["admin", "partner"].includes(v.role.toLowerCase())) {
-        await updateUserRole(userId, { role: v.role.toLowerCase() as "admin" | "partner" });
+      if (roleChanged && ["admin", "partner"].includes(v.role!.toLowerCase())) {
+        await updateUserRole(userId, { role: v.role!.toLowerCase() as "admin" | "partner" });
       }
 
       const hasProfileUpdates =
@@ -402,15 +402,15 @@ export default function UserDetailPage() {
                   className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-100 rounded-lg shadow-sm text-xs"
                 >
                   <span className="font-mono text-gray-600 font-medium">
-                    {acc.accountNumber ?? "—"}
+                    {String(acc.accountNumber ?? "—")}
                   </span>
-                  {acc.accountName && (
-                    <span className="text-gray-400">· {acc.accountName}</span>
+                  {!!acc.accountName && (
+                    <span className="text-gray-400">· {String(acc.accountName)}</span>
                   )}
-                  {acc.accountType && (
-                    <span className="text-gray-300">· {acc.accountType}</span>
+                  {!!acc.accountType && (
+                    <span className="text-gray-300">· {String(acc.accountType)}</span>
                   )}
-                  {acc.status && (
+                  {!!acc.status && (
                     <Badge
                       variant="outline"
                       className={
@@ -419,7 +419,7 @@ export default function UserDetailPage() {
                           : "text-gray-400 border-gray-200 text-[10px] py-0 px-1.5"
                       }
                     >
-                      {acc.status}
+                      {String(acc.status)}
                     </Badge>
                   )}
                 </div>
@@ -559,7 +559,7 @@ export default function UserDetailPage() {
                         #{inv.id as string | number}
                       </TableCell>
                       <TableCell className="font-semibold text-gray-900 text-sm">
-                        {inv.amountInKobo != null ? fmt(inv.amountInKobo) : "—"}
+                        {inv.amountInKobo != null ? fmt(inv.amountInKobo as number) : "—"}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -572,20 +572,20 @@ export default function UserDetailPage() {
                                 : "text-gray-400 border-gray-200 text-xs capitalize"
                           }
                         >
-                          {inv.status}
+                          {String(inv.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-gray-500">
                         {inv.startDate || inv.createdAt
                           ? format(
-                              new Date(inv.startDate || inv.createdAt),
+                              new Date(inv.startDate as string | number | Date || inv.createdAt as string | number | Date),
                               "dd MMM yyyy",
                             )
                           : "—"}
                       </TableCell>
                       <TableCell className="text-xs text-gray-500">
                         {inv.maturityDate
-                          ? format(new Date(inv.maturityDate), "dd MMM yyyy")
+                          ? format(new Date(inv.maturityDate as string | number | Date), "dd MMM yyyy")
                           : "—"}
                       </TableCell>
                     </TableRow>
@@ -650,14 +650,14 @@ export default function UserDetailPage() {
                 ) : (
                   transactions.map((tx: AnyRecord) => (
                     <TableRow
-                      key={tx.reference}
+                      key={tx.reference as string | number}
                       className="hover:bg-gray-50/50"
                     >
                       <TableCell className="font-mono text-xs text-gray-500 max-w-40 truncate">
-                        {tx.reference}
-                        {tx.metadata?.payoutRequestId && (
+                        {String(tx.reference)}
+                        {!!(tx.metadata as Record<string, unknown> | undefined)?.payoutRequestId && (
                           <span className="block text-blue text-[10px]">
-                            Payout #{tx.metadata.payoutRequestId}
+                            Payout #{String((tx.metadata as Record<string, unknown>).payoutRequestId)}
                           </span>
                         )}
                       </TableCell>
@@ -670,16 +670,16 @@ export default function UserDetailPage() {
                               : "text-red border-red/20 bg-red/5 text-xs"
                           }
                         >
-                          {tx.type}
+                          {String(tx.type)}
                         </Badge>
                       </TableCell>
                       <TableCell
-                        className={`font-semibold text-sm ${tx.type === "CREDIT" ? "text-greeny" : "text-red"}`}
+                        className={`font-semibold text-sm ${String(tx.type) === "CREDIT" ? "text-greeny" : "text-red"}`}
                       >
-                        {tx.amountInKobo != null ? fmt(tx.amountInKobo) : "—"}
+                        {tx.amountInKobo != null ? fmt(tx.amountInKobo as number) : "—"}
                       </TableCell>
                       <TableCell className="text-xs text-gray-500 max-w-50 truncate">
-                        {tx.description || tx.narration || "—"}
+                        {String(tx.description || tx.narration || "—")}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -692,12 +692,12 @@ export default function UserDetailPage() {
                                 : "text-gray-400 border-gray-200 text-xs"
                           }
                         >
-                          {tx.status}
+                          {String(tx.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-gray-400">
                         {tx.createdAt
-                          ? format(new Date(tx.createdAt), "dd MMM yyyy, HH:mm")
+                          ? format(new Date(tx.createdAt as string | number | Date), "dd MMM yyyy, HH:mm")
                           : "—"}
                       </TableCell>
                     </TableRow>
@@ -915,25 +915,25 @@ export default function UserDetailPage() {
                   </TableRow>
                 ) : (
                   saveboxes.map((sb: AnyRecord) => (
-                    <TableRow key={sb.id} className="hover:bg-gray-50/50">
+                    <TableRow key={sb.id as string | number} className="hover:bg-gray-50/50">
                       <TableCell className="font-mono text-xs text-gray-500">
-                        #{sb.id}
+                        #{String(sb.id)}
                       </TableCell>
                       <TableCell className="font-medium text-gray-900 text-sm">
-                        {sb.name || sb.title || "—"}
+                        {String(sb.name || sb.title || "—")}
                       </TableCell>
                       <TableCell className="font-semibold text-gray-900 text-sm">
                         {sb.balanceInKobo != null
-                          ? fmt(sb.balanceInKobo)
+                          ? fmt(sb.balanceInKobo as number)
                           : sb.balance != null
-                            ? fmt(sb.balance)
+                            ? fmt(sb.balance as number)
                             : "—"}
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
                         {sb.targetAmountInKobo != null
-                          ? fmt(sb.targetAmountInKobo)
+                          ? fmt(sb.targetAmountInKobo as number)
                           : sb.targetAmount != null
-                            ? fmt(sb.targetAmount)
+                            ? fmt(sb.targetAmount as number)
                             : "—"}
                       </TableCell>
                       <TableCell>
@@ -945,7 +945,7 @@ export default function UserDetailPage() {
                               : "text-gray-400 border-gray-200 text-xs capitalize"
                           }
                         >
-                          {sb.status || "—"}
+                          {String(sb.status || "—")}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -1007,24 +1007,26 @@ export default function UserDetailPage() {
                   </TableRow>
                 ) : (
                   equities.map((eq: AnyRecord) => (
-                    <TableRow key={eq.id} className="hover:bg-gray-50/50">
+                    <TableRow key={eq.id as string | number} className="hover:bg-gray-50/50">
                       <TableCell className="font-mono text-xs text-gray-500">
-                        #{eq.id}
+                        #{String(eq.id)}
                       </TableCell>
                       <TableCell className="text-sm font-medium text-gray-900">
-                        {eq.equityListing?.name ||
-                          eq.listing?.name ||
+                        {String(
+                          (eq.equityListing as Record<string, unknown> | undefined)?.name ||
+                          (eq.listing as Record<string, unknown> | undefined)?.name ||
                           eq.listingId ||
-                          "—"}
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-gray-700">
-                        {eq.quantity ?? "—"}
+                        {String(eq.quantity ?? "—")}
                       </TableCell>
                       <TableCell className="text-sm font-semibold text-gray-900">
                         {eq.purchasePriceInKobo != null
-                          ? fmt(eq.purchasePriceInKobo)
+                          ? fmt(eq.purchasePriceInKobo as number)
                           : eq.purchasePrice != null
-                            ? fmt(eq.purchasePrice)
+                            ? fmt(eq.purchasePrice as number)
                             : "—"}
                       </TableCell>
                       <TableCell>
@@ -1036,7 +1038,7 @@ export default function UserDetailPage() {
                               : "text-gray-400 border-gray-200 text-xs capitalize"
                           }
                         >
-                          {eq.status || "—"}
+                          {String(eq.status || "—")}
                         </Badge>
                       </TableCell>
                     </TableRow>
