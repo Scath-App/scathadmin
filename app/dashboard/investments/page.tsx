@@ -12,6 +12,7 @@ import { MoneyCell } from "@/components/ui/MoneyCell";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -30,13 +31,15 @@ import { toast } from "sonner";
 
 const oppSchema = z.object({
   name: z.string().min(1, "Required"),
-  description: z.string().optional(),
-  minAmountInKobo: z.coerce.number().min(0),
-  maxAmountInKobo: z.coerce.number().min(0),
-  fundingGoalInKobo: z.coerce.number().min(0),
+  description: z.string().min(1, "Required"),
+  minimumAmount: z.coerce.number().min(0),
+  maximumAmount: z.coerce.number().min(0),
+  fundingGoal: z.coerce.number().min(0),
   roiPercentage: z.coerce.number().min(0).max(100),
-  durationInDays: z.coerce.number().min(1),
-  status: z.enum(["open", "closed", "funded"]),
+  durationInMonths: z.coerce.number().min(1),
+  status: z.enum(["ACTIVE", "SOLD_OUT", "MATURED", "PAUSED"]),
+  startDate: z.string().min(1, "Required"),
+  endDate: z.string().min(1, "Required"),
 });
 
 export default function InvestmentsPage() {
@@ -56,8 +59,10 @@ export default function InvestmentsPage() {
     resolver: zodResolver(oppSchema) as any,
     defaultValues: {
       name: "", description: "",
-      minAmountInKobo: 0, maxAmountInKobo: 0, fundingGoalInKobo: 0,
-      roiPercentage: 0, durationInDays: 30, status: "open",
+      minimumAmount: 0, maximumAmount: 0, fundingGoal: 0,
+      roiPercentage: 0, durationInMonths: 12, status: "ACTIVE",
+      startDate: new Date().toISOString().slice(0, 16),
+      endDate: new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0, 16),
     },
   });
 
@@ -103,12 +108,14 @@ export default function InvestmentsPage() {
     setEditingOpp(opp);
     form.reset({
       name: opp.name, description: opp.description ?? "",
-      minAmountInKobo: opp.minAmountInKobo ?? 0,
-      maxAmountInKobo: opp.maxAmountInKobo ?? 0,
-      fundingGoalInKobo: opp.fundingGoalInKobo ?? 0,
+      minimumAmount: opp.minimumAmount ?? 0,
+      maximumAmount: opp.maximumAmount ?? 0,
+      fundingGoal: opp.fundingGoal ?? 0,
       roiPercentage: opp.roiPercentage ?? 0,
-      durationInDays: opp.durationInDays ?? 30,
-      status: opp.status ?? "open",
+      durationInMonths: opp.durationInMonths ?? 12,
+      status: (["ACTIVE", "SOLD_OUT", "MATURED", "PAUSED"].includes(opp.status?.toUpperCase()) ? opp.status.toUpperCase() : "ACTIVE") as any,
+      startDate: opp.startDate ? new Date(opp.startDate).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+      endDate: opp.endDate ? new Date(opp.endDate).toISOString().slice(0, 16) : new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0, 16),
     });
     setIsFormOpen(true);
   };
@@ -116,31 +123,31 @@ export default function InvestmentsPage() {
   const columns: Column[] = [
     { key: "name", header: "Name", className: "font-medium text-sm" },
     {
-      key: "minAmountInKobo",
+      key: "minimumAmount",
       header: "Min Amount",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell kobo={v} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell naira={v} /></div>,
     },
     {
-      key: "maxAmountInKobo",
+      key: "maximumAmount",
       header: "Max Amount",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell kobo={v} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell naira={v} /></div>,
     },
     {
-      key: "fundingGoalInKobo",
+      key: "fundingGoal",
       header: "Funding Goal",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell kobo={v} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell naira={v} /></div>,
     },
     {
-      key: "totalInvestedInKobo",
+      key: "totalInvested",
       header: "Total Invested",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell kobo={v ?? 0} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell naira={v ?? 0} /></div>,
     },
     { key: "roiPercentage", header: "ROI %", className: "font-mono text-sm", render: (v) => `${v ?? 0}%` },
-    { key: "durationInDays", header: "Duration", render: (v) => `${v}d` },
+    { key: "durationInMonths", header: "Duration", render: (v) => `${v} mo` },
     { key: "status", header: "Status", render: (v) => <StatusBadge status={v} /> },
     {
       key: "startDate",
@@ -188,27 +195,41 @@ export default function InvestmentsPage() {
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit((v) => {
-              if (editingOpp) updateMutation.mutate({ id: editingOpp.id, data: v });
-              else createMutation.mutate(v);
+              const payload = {
+                ...v,
+                startDate: new Date(v.startDate).toISOString(),
+                endDate: new Date(v.endDate).toISOString(),
+              };
+              if (editingOpp) updateMutation.mutate({ id: editingOpp.id, data: payload });
+              else createMutation.mutate(payload);
             })} className="space-y-4 pt-1">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
+              <FormField control={form.control} name="description" render={({ field }) => (
+                <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea rows={3} {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
               <div className="grid grid-cols-2 gap-3">
-                <FormField control={form.control} name="minAmountInKobo" render={({ field }) => (
-                  <FormItem><FormLabel>Min Amount (kobo)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormField control={form.control} name="minimumAmount" render={({ field }) => (
+                  <FormItem><FormLabel>Min Amount (₦)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
-                <FormField control={form.control} name="maxAmountInKobo" render={({ field }) => (
-                  <FormItem><FormLabel>Max Amount (kobo)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormField control={form.control} name="maximumAmount" render={({ field }) => (
+                  <FormItem><FormLabel>Max Amount (₦)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
-                <FormField control={form.control} name="fundingGoalInKobo" render={({ field }) => (
-                  <FormItem><FormLabel>Funding Goal (kobo)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormField control={form.control} name="fundingGoal" render={({ field }) => (
+                  <FormItem><FormLabel>Funding Goal (₦)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="roiPercentage" render={({ field }) => (
                   <FormItem><FormLabel>ROI %</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
-                <FormField control={form.control} name="durationInDays" render={({ field }) => (
-                  <FormItem><FormLabel>Duration (days)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormField control={form.control} name="durationInMonths" render={({ field }) => (
+                  <FormItem><FormLabel>Duration (months)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="startDate" render={({ field }) => (
+                  <FormItem><FormLabel>Start Date</FormLabel><FormControl><Input type="datetime-local" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="endDate" render={({ field }) => (
+                  <FormItem><FormLabel>End Date</FormLabel><FormControl><Input type="datetime-local" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="status" render={({ field }) => (
                   <FormItem>
@@ -216,9 +237,10 @@ export default function InvestmentsPage() {
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                       <SelectContent>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
-                        <SelectItem value="funded">Funded</SelectItem>
+                        <SelectItem value="ACTIVE">Active</SelectItem>
+                        <SelectItem value="SOLD_OUT">Sold Out</SelectItem>
+                        <SelectItem value="MATURED">Matured</SelectItem>
+                        <SelectItem value="PAUSED">Paused</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

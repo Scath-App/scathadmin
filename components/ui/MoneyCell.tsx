@@ -1,5 +1,12 @@
 "use client";
 
+/** Convert a naira value entered by the user to kobo (integer) for the API */
+export function nairaToKobo(naira: number | string | null | undefined): number {
+  const n = Number(naira);
+  if (isNaN(n)) return 0;
+  return Math.round(n * 100);
+}
+
 /** Format an amount in kobo to a naira string: ₦1,234.56 */
 export function formatNaira(kobo: number | null | undefined): string {
   if (kobo == null || isNaN(kobo)) return "₦0.00";

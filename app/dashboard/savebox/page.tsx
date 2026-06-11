@@ -93,7 +93,7 @@ export default function SaveboxConfigPage() {
 
   const columns: Column[] = [
     { key: "type", header: "Type", className: "font-medium text-sm" },
-    { key: "duration", header: "Duration (days)", className: "font-mono text-sm" },
+    { key: "duration", header: "Duration (months)", className: "font-mono text-sm" },
     { key: "interestRate", header: "Interest Rate", render: (v) => `${v}%` },
     { key: "upfrontRate", header: "Upfront Rate", render: (v) => `${v}%` },
     { key: "spreadRate", header: "Spread Rate", render: (v) => `${v}%` },
@@ -155,7 +155,7 @@ export default function SaveboxConfigPage() {
               )} />
               <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="duration" render={({ field }) => (
-                  <FormItem><FormLabel>Duration (days)</FormLabel><FormControl><Input type="number" min={1} {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Duration (months)</FormLabel><FormControl><Input type="number" min={1} {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="interestRate" render={({ field }) => (
                   <FormItem><FormLabel>Interest Rate (%)</FormLabel><FormControl><Input type="number" step="0.01" min={0} max={100} {...field} /></FormControl><FormMessage /></FormItem>

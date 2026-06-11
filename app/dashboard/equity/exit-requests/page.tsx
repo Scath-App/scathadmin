@@ -99,17 +99,17 @@ export default function ExitRequestsPage() {
       render: (v) => v ?? "—",
     },
     {
-      key: "id",
+      key: "actions",
       header: "Actions",
       headerClassName: "text-right",
-      render: (id, row) =>
+      render: (_v, row) =>
         row.status === "pending" || row.status === "PENDING" ? (
           <div className="flex items-center justify-end gap-1.5">
             <Button
               size="sm"
               variant="ghost"
               className="text-greeny hover:bg-greeny/10 text-xs gap-1"
-              onClick={() => setApprovingId(id)}
+              onClick={() => setApprovingId(row.id)}
             >
               <CheckCircle className="w-3.5 h-3.5" /> Approve
             </Button>
@@ -117,7 +117,7 @@ export default function ExitRequestsPage() {
               size="sm"
               variant="ghost"
               className="text-red hover:bg-red/10 text-xs gap-1"
-              onClick={() => setRejectingId(id)}
+              onClick={() => setRejectingId(row.id)}
             >
               <XCircle className="w-3.5 h-3.5" /> Reject
             </Button>

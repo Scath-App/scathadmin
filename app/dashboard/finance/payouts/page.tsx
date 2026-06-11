@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getPendingPayouts, approvePayout, rejectPayout, initiateManualPayout,
 } from "@/lib/financeService";
+import { searchUsers, UserSearchResult } from "@/lib/userService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MoneyCell, formatNaira } from "@/components/ui/MoneyCell";
@@ -22,16 +23,210 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { CheckCircle, XCircle, Plus, Clock } from "lucide-react";
+import {
+  CheckCircle, XCircle, Plus, Clock, Search, User, X, Phone, Mail, CreditCard,
+} from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
+// ─── Schema ────────────────────────────────────────────────────────────────────
+
 const payoutSchema = z.object({
-  userId: z.coerce.number().positive("User ID required"),
+  userId: z.coerce.number().positive("Please select a user"),
   amountInKobo: z.coerce.number().min(100, "Minimum ₦1"),
   description: z.string().min(3, "Required"),
   accountNumber: z.string().optional(),
 });
+
+// ─── UserSearchCombobox ────────────────────────────────────────────────────────
+
+interface UserSearchComboboxProps {
+  value: number | undefined;
+  onSelect: (user: UserSearchResult) => void;
+  onClear: () => void;
+  selectedUser: UserSearchResult | null;
+  error?: string;
+}
+
+function UserSearchCombobox({ value, onSelect, onClear, selectedUser, error }: UserSearchComboboxProps) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce the query
+  const handleQueryChange = useCallback((q: string) => {
+    setQuery(q);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setDebouncedQuery(q.trim()), 350);
+  }, []);
+
+  const { data: results = [], isFetching } = useQuery<UserSearchResult[]>({
+    queryKey: ["userSearch", debouncedQuery],
+    queryFn: () => searchUsers(debouncedQuery, 8),
+    enabled: debouncedQuery.length >= 2,
+    staleTime: 10_000,
+  });
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current && !inputRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  if (selectedUser) {
+    return (
+      <div className={`rounded-lg border p-3 bg-blue/5 ${error ? "border-red" : "border-blue/30"}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-blue/10 flex items-center justify-center shrink-0">
+              <User className="w-4 h-4 text-blue" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-sm text-gray-900 truncate">
+                {selectedUser.displayName}
+              </p>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                {selectedUser.email && (
+                  <span className="flex items-center gap-1 text-xs text-gray-500">
+                    <Mail className="w-3 h-3" />
+                    {selectedUser.email}
+                  </span>
+                )}
+                {selectedUser.phoneNumber && (
+                  <span className="flex items-center gap-1 text-xs text-gray-500">
+                    <Phone className="w-3 h-3" />
+                    {selectedUser.phoneNumber}
+                  </span>
+                )}
+                {selectedUser.matchedAccountNumber && (
+                  <span className="flex items-center gap-1 text-xs text-gray-500">
+                    <CreditCard className="w-3 h-3" />
+                    {selectedUser.matchedAccountNumber}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Clear selected user"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] text-gray-400 font-mono">User ID #{selectedUser.id}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <div className={`flex items-center rounded-md border bg-white transition-colors ${
+        open ? "border-blue ring-1 ring-blue/30" : error ? "border-red" : "border-input"
+      }`}>
+        <Search className="w-4 h-4 ml-3 shrink-0 text-gray-400" />
+        <input
+          ref={inputRef}
+          type="text"
+          className="flex-1 px-2 py-2.5 text-sm bg-transparent outline-none placeholder:text-gray-400"
+          placeholder="Search by email, phone, or account number…"
+          value={query}
+          onChange={(e) => {
+            handleQueryChange(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {isFetching && (
+          <div className="mr-3 w-4 h-4 border-2 border-blue/30 border-t-blue rounded-full animate-spin" />
+        )}
+      </div>
+
+      {open && debouncedQuery.length >= 2 && (
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden"
+        >
+          {results.length === 0 && !isFetching ? (
+            <div className="px-4 py-6 text-center text-sm text-gray-500">
+              No users found for <span className="font-medium">"{debouncedQuery}"</span>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-50 max-h-60 overflow-y-auto">
+              {results.map((user) => (
+                <li key={user.id}>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue/5 transition-colors text-left"
+                    onClick={() => {
+                      onSelect(user);
+                      setOpen(false);
+                      setQuery("");
+                      setDebouncedQuery("");
+                    }}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-gray-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {user.displayName}
+                      </p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                        {user.email && (
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
+                            <Mail className="w-3 h-3" />
+                            {user.email}
+                          </span>
+                        )}
+                        {user.phoneNumber && (
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
+                            <Phone className="w-3 h-3" />
+                            {user.phoneNumber}
+                          </span>
+                        )}
+                        {user.matchedAccountNumber && (
+                          <span className="flex items-center gap-1 text-xs text-blue font-medium">
+                            <CreditCard className="w-3 h-3" />
+                            {user.matchedAccountNumber}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-gray-400 font-mono">
+                      #{user.id}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="mt-1 text-xs text-red">{error}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PayoutsPage() {
   const queryClient = useQueryClient();
@@ -40,6 +235,7 @@ export default function PayoutsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [payoutResult, setPayoutResult] = useState<any>(null);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
+  const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
 
   const { data: pending, isLoading } = useQuery({
     queryKey: ["pendingPayouts"],
@@ -51,8 +247,23 @@ export default function PayoutsPage() {
 
   const form = useForm<z.infer<typeof payoutSchema>>({
     resolver: zodResolver(payoutSchema) as any,
-    defaultValues: { userId: undefined as any, amountInKobo: undefined as any, description: "", accountNumber: "" },
+    defaultValues: {
+      userId: undefined as any,
+      amountInKobo: undefined as any,
+      description: "",
+      accountNumber: "",
+    },
   });
+
+  const userIdError = form.formState.errors.userId?.message;
+
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      setIsCreateOpen(false);
+      setSelectedUser(null);
+      form.reset();
+    }
+  };
 
   const approveMutation = useMutation({
     mutationFn: ({ id, reason }: { id: number; reason?: string }) => approvePayout(id, reason),
@@ -86,6 +297,7 @@ export default function PayoutsPage() {
       queryClient.invalidateQueries({ queryKey: ["pendingPayouts"] });
       setPayoutResult(res);
       setIsCreateOpen(false);
+      setSelectedUser(null);
       form.reset();
     },
     onError: (e: any) => {
@@ -232,44 +444,87 @@ export default function PayoutsPage() {
       />
 
       {/* Manual Payout modal */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+      <Dialog open={isCreateOpen} onOpenChange={handleDialogClose}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Initiate Manual Payout</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-gray-500 -mt-1">Auto-approved if below threshold; otherwise queued for checker approval.</p>
+          <p className="text-xs text-gray-500 -mt-1">
+            Auto-approved if below threshold; otherwise queued for checker approval.
+          </p>
+
           <Form {...form}>
-            <form onSubmit={form.handleSubmit((v) => createMutation.mutate(v))} className="space-y-4 pt-1">
-              <FormField control={form.control} name="userId" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>User ID</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g. 123" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+            <form
+              onSubmit={form.handleSubmit((v) => createMutation.mutate(v))}
+              className="space-y-4 pt-1"
+            >
+              {/* ── User lookup ── */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">
+                  Recipient User
+                </label>
+                <UserSearchCombobox
+                  value={form.watch("userId")}
+                  selectedUser={selectedUser}
+                  error={userIdError}
+                  onSelect={(user) => {
+                    setSelectedUser(user);
+                    form.setValue("userId", user.id, { shouldValidate: true });
+                  }}
+                  onClear={() => {
+                    setSelectedUser(null);
+                    form.setValue("userId", undefined as any, { shouldValidate: false });
+                  }}
+                />
+                {!selectedUser && (
+                  <p className="text-[11px] text-gray-400 flex items-center gap-1 pt-0.5">
+                    <Search className="w-3 h-3" />
+                    Type at least 2 characters — email, phone number, or account number
+                  </p>
+                )}
+              </div>
+
+              {/* ── Amount ── */}
               <FormField control={form.control} name="amountInKobo" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Amount in Kobo (min 100 = ₦1)</FormLabel>
-                  <FormControl><Input type="number" min={100} placeholder="e.g. 500000 = ₦5,000" {...field} /></FormControl>
+                  <FormLabel>Amount in Kobo <span className="text-gray-400 font-normal">(min 100 = ₦1)</span></FormLabel>
+                  <FormControl>
+                    <Input type="number" min={100} placeholder="e.g. 500000 = ₦5,000" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {/* ── Description ── */}
               <FormField control={form.control} name="description" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Description</FormLabel>
-                  <FormControl><Input placeholder="Reason for payout" {...field} /></FormControl>
+                  <FormControl>
+                    <Input placeholder="Reason for payout" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {/* ── Account override ── */}
               <FormField control={form.control} name="accountNumber" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Account Number (optional)</FormLabel>
-                  <FormControl><Input placeholder="Override destination account" {...field} /></FormControl>
+                  <FormLabel>
+                    Account Number <span className="text-gray-400 font-normal">(optional override)</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input placeholder="Leave blank to use user's default" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
-              <Button type="submit" className="w-full bg-blue text-white" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Processing..." : "Initiate Payout"}
+
+              <Button
+                type="submit"
+                className="w-full bg-blue text-white"
+                disabled={createMutation.isPending}
+              >
+                {createMutation.isPending ? "Processing…" : "Initiate Payout"}
               </Button>
             </form>
           </Form>
