@@ -50,8 +50,10 @@ import {
   ArrowLeftRight,
   RefreshCw,
   RefreshCcw,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 const CHART_COLORS = ["#074D97", "#53A753", "#FFC52F", "#5727F5", "#EA4335", "#0980FF"];
 
@@ -70,6 +72,7 @@ function fmt(naira: number | null | undefined) {
 
 export default function TreasuryPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [page, setPage] = useState(0);
   const [isPoolOpen, setIsPoolOpen] = useState(false);
   const [poolForm, setPoolForm] = useState({
@@ -207,16 +210,20 @@ export default function TreasuryPage() {
       headerClassName: "text-right",
       render: (id) => (
         <div className="flex justify-end">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 text-gray-400 hover:text-blue"
-            disabled={syncOneMutation.isPending}
-            onClick={() => syncOneMutation.mutate(id)}
-            title="Sync account"
-          >
-            <RefreshCcw className="w-3.5 h-3.5" />
-          </Button>
+          {isAdmin ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-gray-400 hover:text-blue"
+              disabled={syncOneMutation.isPending}
+              onClick={() => syncOneMutation.mutate(id)}
+              title="Sync account"
+            >
+              <RefreshCcw className="w-3.5 h-3.5" />
+            </Button>
+          ) : (
+            <span className="text-xs text-gray-400">—</span>
+          )}
         </div>
       ),
     },
@@ -229,24 +236,26 @@ export default function TreasuryPage() {
         title="Treasury"
         subtitle="Platform fund accounts, balances, and internal transfers."
         actions={
-          <>
-            <Button
-              variant="outline"
-              className="gap-2 border-gray-200"
-              disabled={syncAllMutation.isPending}
-              onClick={() => syncAllMutation.mutate()}
-            >
-              <RefreshCw className={`h-4 w-4 ${syncAllMutation.isPending ? "animate-spin" : ""}`} />
-              Sync All
-            </Button>
-            <Button
-              className="bg-blue hover:bg-darkBlue text-white gap-2"
-              onClick={() => setIsPoolOpen(true)}
-            >
-              <ArrowLeftRight className="h-4 w-4" />
-              Pool Transfer
-            </Button>
-          </>
+          isAdmin && (
+            <>
+              <Button
+                variant="outline"
+                className="gap-2 border-gray-200"
+                disabled={syncAllMutation.isPending}
+                onClick={() => syncAllMutation.mutate()}
+              >
+                <RefreshCw className={`h-4 w-4 ${syncAllMutation.isPending ? "animate-spin" : ""}`} />
+                Sync All
+              </Button>
+              <Button
+                className="bg-blue hover:bg-darkBlue text-white gap-2"
+                onClick={() => setIsPoolOpen(true)}
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+                Pool Transfer
+              </Button>
+            </>
+          )
         }
       />
 

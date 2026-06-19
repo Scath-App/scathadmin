@@ -9,14 +9,16 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MoneyCell } from "@/components/ui/MoneyCell";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 const LIMIT = 20;
 
 export default function ExitRequestsPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [page, setPage] = useState(1);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
@@ -24,6 +26,7 @@ export default function ExitRequestsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["exitRequests", page],
     queryFn: () => getExitRequests(page, LIMIT),
+    enabled: isAdmin,
   });
 
   const requests: any[] = data?.data ?? [];
@@ -125,6 +128,18 @@ export default function ExitRequestsPage() {
         ) : null,
     },
   ];
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-3 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <Lock className="w-6 h-6 text-gray-400" />
+        </div>
+        <p className="text-base font-semibold text-gray-700">Admin Access Required</p>
+        <p className="text-sm text-gray-400 max-w-xs">Equity exit requests are restricted to administrators.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">

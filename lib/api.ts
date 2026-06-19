@@ -59,7 +59,7 @@ api.interceptors.response.use(
 
     // 403 — permission denied
     if (status === 403) {
-      toast.error("You don't have permission for this action.");
+      toast.error("Access Denied: Your account role does not have permission to execute this operation.");
       return Promise.reject(error);
     }
 

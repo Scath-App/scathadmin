@@ -4,17 +4,15 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getOffers, createOffer, updateOffer, deleteOffer,
-  getPendingOfferRequests, submitOfferQuote,
 } from "@/lib/offerService";
+import { searchUsers } from "@/lib/userService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { MoneyCell } from "@/components/ui/MoneyCell";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { RoleGate } from "@/components/ui/RoleGate";
+import { useRole } from "@/hooks/useRole";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -24,50 +22,48 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Edit, Trash2, DollarSign } from "lucide-react";
-import { format } from "date-fns";
+import { Plus, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 const offerSchema = z.object({
   name: z.string().min(1, "Required"),
   description: z.string().optional(),
-  url: z.string().url("Must be a valid URL").optional().or(z.literal("")),
-  partnerId: z.coerce.number().optional(),
-});
-
-const quoteSchema = z.object({
-  amount: z.coerce.number().positive("Amount required"),
-  serviceDescription: z.string().min(3, "Required"),
+  url: z.string().url("Must be a valid URL"),
+  imageUrl: z.preprocess((v) => v === "" ? undefined : v, z.string().url("Must be a valid URL").optional()),
+  partnerId: z.preprocess((v) => {
+    if (v === "" || v == null) return undefined;
+    const num = Number(v);
+    return isNaN(num) || num <= 0 ? undefined : num;
+  }, z.number().optional()),
+  isActive: z.boolean().optional(),
 });
 
 export default function OffersPage() {
   const queryClient = useQueryClient();
+  const { role, isAdmin, isStaff } = useRole();
+  const isAdminOrStaff = isAdmin || isStaff;
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOffer, setEditingOffer] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [quotingRequest, setQuotingRequest] = useState<any>(null);
+
+  // Partner email resolution state
+  const [partnerEmail, setPartnerEmail] = useState("");
+  const [partnerStatus, setPartnerStatus] = useState<"idle" | "resolving" | "found" | "not_found" | "not_partner">("idle");
+  const [resolvedPartnerName, setResolvedPartnerName] = useState("");
+
+  const [page, setPage] = useState(0);
+  const LIMIT = 50;
 
   const { data: offersRaw, isLoading: offersLoading } = useQuery({
-    queryKey: ["offers"],
-    queryFn: () => getOffers(),
+    queryKey: ["offers", role, page],
+    queryFn: () => getOffers(page, LIMIT),
   });
 
-  const { data: pendingRaw, isLoading: pendingLoading } = useQuery({
-    queryKey: ["pendingOfferRequests"],
-    queryFn: getPendingOfferRequests,
-  });
-
-  const offers: any[] = Array.isArray(offersRaw) ? offersRaw : offersRaw?.data ?? [];
-  const pending: any[] = Array.isArray(pendingRaw) ? pendingRaw : pendingRaw?.data ?? [];
+  const offers: any[] = Array.isArray(offersRaw) ? offersRaw : [];
 
   const offerForm = useForm<z.infer<typeof offerSchema>>({
     resolver: zodResolver(offerSchema) as any,
-    defaultValues: { name: "", description: "", url: "", partnerId: undefined },
-  });
-
-  const quoteForm = useForm<z.infer<typeof quoteSchema>>({
-    resolver: zodResolver(quoteSchema) as any,
-    defaultValues: { amount: undefined as any, serviceDescription: "" },
+    defaultValues: { name: "", description: "", url: "", imageUrl: "", partnerId: undefined, isActive: false },
   });
 
   const createMutation = useMutation({
@@ -78,7 +74,7 @@ export default function OffersPage() {
       setIsFormOpen(false);
       offerForm.reset();
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed."),
+    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to create offer."),
   });
 
   const updateMutation = useMutation({
@@ -89,7 +85,7 @@ export default function OffersPage() {
       setEditingOffer(null);
       setIsFormOpen(false);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed."),
+    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to update offer."),
   });
 
   const deleteMutation = useMutation({
@@ -99,29 +95,64 @@ export default function OffersPage() {
       toast.success("Offer deleted.");
       setDeletingId(null);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed."),
+    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to delete offer."),
   });
 
-  const quoteMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { amount: number; serviceDescription: string } }) =>
-      submitOfferQuote(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pendingOfferRequests"] });
-      toast.success("Quote submitted. Request moved to pending_payment.");
-      setQuotingRequest(null);
-      quoteForm.reset();
-    },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to submit quote."),
-  });
+  const resetPartnerState = () => {
+    setPartnerEmail("");
+    setPartnerStatus("idle");
+    setResolvedPartnerName("");
+    offerForm.setValue("partnerId", undefined);
+  };
+
+  const resolvePartnerEmail = async (email: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) { resetPartnerState(); return; }
+    setPartnerStatus("resolving");
+    try {
+      const results = await searchUsers(trimmed, 5);
+      const match = results.find((u) => u.email.toLowerCase() === trimmed.toLowerCase());
+      if (!match) {
+        setPartnerStatus("not_found");
+        offerForm.setValue("partnerId", undefined);
+      } else if (match.role !== "partner") {
+        setPartnerStatus("not_partner");
+        offerForm.setValue("partnerId", undefined);
+      } else {
+        setPartnerStatus("found");
+        setResolvedPartnerName(match.displayName || match.email);
+        offerForm.setValue("partnerId", match.id);
+      }
+    } catch {
+      setPartnerStatus("not_found");
+    }
+  };
 
   const openEdit = (offer: any) => {
     setEditingOffer(offer);
-    offerForm.reset({ name: offer.name, description: offer.description ?? "", url: offer.url ?? "", partnerId: offer.partnerId });
+    if (offer.partner) {
+      const p = offer.partner;
+      const email = p.email ?? "";
+      setPartnerEmail(email);
+      setPartnerStatus("found");
+      setResolvedPartnerName([p.firstName, p.lastName].filter(Boolean).join(" ") || email);
+    } else {
+      resetPartnerState();
+    }
+    offerForm.reset({
+      name: offer.name,
+      description: offer.description ?? "",
+      url: offer.url ?? "",
+      imageUrl: offer.imageUrl ?? "",
+      partnerId: offer.partner?.id,
+      isActive: offer.isActive ?? false
+    });
     setIsFormOpen(true);
   };
 
   const openCreate = () => {
     setEditingOffer(null);
+    resetPartnerState();
     offerForm.reset();
     setIsFormOpen(true);
   };
@@ -134,7 +165,23 @@ export default function OffersPage() {
       header: "URL",
       render: (v) => v ? <a href={v} target="_blank" rel="noreferrer" className="text-blue text-xs underline truncate block max-w-[160px]">{v}</a> : "—",
     },
-    { key: "partnerId", header: "Partner ID", render: (v) => v ? `#${v}` : "—" },
+    // Conditionally include partner column if user is Admin or Staff
+    ...(isAdminOrStaff ? [{
+      key: "partner",
+      header: "Partner",
+      render: (v: any) => v ? (
+        <span className="text-sm text-gray-700">{[v.firstName, v.lastName].filter(Boolean).join(" ") || `#${v.id}`}</span>
+      ) : <span className="text-gray-400 text-xs">—</span>,
+    }] : []),
+    {
+      key: "isActive",
+      header: "Status",
+      render: (v) => (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide ${v ? "bg-green/10 text-green" : "bg-gray-100 text-gray-500"}`}>
+          {v ? "ACTIVE" : "INACTIVE"}
+        </span>
+      ),
+    },
     {
       key: "id",
       header: "Actions",
@@ -144,145 +191,121 @@ export default function OffersPage() {
           <Button size="sm" variant="ghost" className="text-blue hover:bg-blue/5" onClick={() => openEdit(row)}>
             <Edit className="w-3.5 h-3.5" />
           </Button>
-          <Button size="sm" variant="ghost" className="text-red hover:bg-red/5" onClick={() => setDeletingId(id)}>
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
+          {isAdmin && (
+            <Button size="sm" variant="ghost" className="text-red hover:bg-red/5" onClick={() => setDeletingId(id)}>
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
       ),
     },
   ];
 
-  const pendingColumns: Column[] = [
-    { key: "id", header: "ID", render: (v) => `#${v}`, className: "font-mono text-xs text-gray-500" },
-    {
-      key: "offerName",
-      header: "Offer Name",
-      render: (_, row) => row.offer?.name ?? row.offerName ?? "—",
-    },
-    {
-      key: "userId",
-      header: "Customer",
-      render: (v, row) => row.user?.email ?? `User #${v}`,
-    },
-    { key: "status", header: "Status", render: (v) => <StatusBadge status={v} /> },
-    {
-      key: "clickedAt",
-      header: "Clicked At",
-      render: (v) => v ? format(new Date(v), "dd MMM yyyy, HH:mm") : "—",
-    },
-    {
-      key: "quotedAmount",
-      header: "Quoted Amount",
-      headerClassName: "text-right",
-      render: (v) => v != null ? <div className="text-right"><MoneyCell kobo={v} /></div> : "—",
-    },
-    {
-      key: "id",
-      header: "Actions",
-      headerClassName: "text-right",
-      render: (id, row) =>
-        row.status === "clicked" || row.status === "CLICKED" ? (
-          <RoleGate roles={["ADMIN", "PARTNER"]}>
-            <div className="text-right">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-blue hover:bg-blue/5 gap-1 text-xs"
-                onClick={() => { setQuotingRequest(row); quoteForm.reset(); }}
-              >
-                <DollarSign className="w-3.5 h-3.5" /> Quote
-              </Button>
-            </div>
-          </RoleGate>
-        ) : null,
-    },
-  ];
-
   return (
-    <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">
-      <PageHeader title="Offers" subtitle="Manage platform offers and pending customer requests." />
+    <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <PageHeader title="Offers" subtitle="Manage platform offers and business services." />
+        <Button className="bg-blue hover:bg-darkBlue text-white gap-2 self-start sm:self-auto rounded-xl shadow-sm" onClick={openCreate}>
+          <Plus className="w-4 h-4" /> New Offer
+        </Button>
+      </div>
 
-      <Tabs defaultValue="offers" className="w-full">
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <TabsList className="bg-gray-100 p-1 rounded-xl">
-            <TabsTrigger value="offers" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm text-sm">
-              All Offers
-            </TabsTrigger>
-            <TabsTrigger value="pending" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm text-sm">
-              Pending Requests
-              {pending.length > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-red text-white text-[10px] font-bold">
-                  {pending.length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-          <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
-            <Plus className="w-4 h-4" /> New Offer
-          </Button>
-        </div>
-
-        <TabsContent value="offers">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <DataTable columns={offerColumns} data={offers} loading={offersLoading} rowKey={(r) => r.id} />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="pending">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <DataTable columns={pendingColumns} data={pending} loading={pendingLoading} rowKey={(r) => r.id} emptyMessage="No pending offer requests." />
-          </div>
-        </TabsContent>
-      </Tabs>
+      <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] overflow-hidden">
+        <DataTable
+          columns={offerColumns}
+          data={offers}
+          loading={offersLoading}
+          rowKey={(r) => r.id}
+          emptyMessage="No offers found."
+        />
+      </div>
 
       {/* Create / Edit offer modal */}
       <Dialog open={isFormOpen} onOpenChange={(v) => { if (!v) { setIsFormOpen(false); setEditingOffer(null); } }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingOffer ? "Edit Offer" : "New Offer"}</DialogTitle>
           </DialogHeader>
           <Form {...offerForm}>
             <form onSubmit={offerForm.handleSubmit((v) => {
-              if (editingOffer) updateMutation.mutate({ id: editingOffer.id, data: v });
-              else createMutation.mutate(v);
+              if (editingOffer) {
+                updateMutation.mutate({ id: editingOffer.id, data: v });
+              } else {
+                const { isActive, ...createData } = v;
+                createMutation.mutate(createData);
+              }
             })} className="space-y-4 pt-1">
               <FormField control={offerForm.control} name="name" render={({ field }) => (
-                <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Name</FormLabel><FormControl><Input className="rounded-xl h-11" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={offerForm.control} name="description" render={({ field }) => (
-                <FormItem><FormLabel>Description</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Description</FormLabel><FormControl><Input className="rounded-xl h-11" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={offerForm.control} name="url" render={({ field }) => (
-                <FormItem><FormLabel>URL</FormLabel><FormControl><Input placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>URL</FormLabel><FormControl><Input className="rounded-xl h-11" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={offerForm.control} name="partnerId" render={({ field }) => (
-                <FormItem><FormLabel>Partner ID (optional)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormField control={offerForm.control} name="imageUrl" render={({ field }) => (
+                <FormItem><FormLabel>Image URL (optional)</FormLabel><FormControl><Input className="rounded-xl h-11" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              <Button type="submit" className="w-full bg-blue text-white" disabled={createMutation.isPending || updateMutation.isPending}>
-                {(createMutation.isPending || updateMutation.isPending) ? "Saving..." : editingOffer ? "Save Changes" : "Create Offer"}
-              </Button>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
 
-      {/* Quote modal */}
-      <Dialog open={!!quotingRequest} onOpenChange={(v) => { if (!v) setQuotingRequest(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Submit Quote</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-gray-500 -mt-1">For: {quotingRequest?.offer?.name ?? `Request #${quotingRequest?.id}`}</p>
-          <Form {...quoteForm}>
-            <form onSubmit={quoteForm.handleSubmit((v) => quoteMutation.mutate({ id: quotingRequest.id, data: v }))} className="space-y-4 pt-1">
-              <FormField control={quoteForm.control} name="amount" render={({ field }) => (
-                <FormItem><FormLabel>Amount (kobo) <span className="text-xs text-gray-400">— min 1</span></FormLabel><FormControl><Input type="number" min={1} {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={quoteForm.control} name="serviceDescription" render={({ field }) => (
-                <FormItem><FormLabel>Service Description</FormLabel><FormControl><Input placeholder="What will be provided..." {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <Button type="submit" className="w-full bg-blue text-white" disabled={quoteMutation.isPending}>
-                {quoteMutation.isPending ? "Submitting..." : "Submit Quote"}
+              {/* Show Partner ID Lookup and Active Toggle only to ADMIN and STAFF */}
+              {isAdminOrStaff && (
+                <>
+                  <FormField control={offerForm.control} name="partnerId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Partner email (optional)</FormLabel>
+                      <FormControl>
+                        <input type="hidden" {...field} />
+                      </FormControl>
+                      <Input
+                        type="email"
+                        placeholder="partner@example.com"
+                        value={partnerEmail}
+                        onChange={(e) => {
+                          setPartnerEmail(e.target.value);
+                          setPartnerStatus("idle");
+                          setResolvedPartnerName("");
+                          offerForm.setValue("partnerId", undefined);
+                        }}
+                        onBlur={(e) => resolvePartnerEmail(e.target.value)}
+                        className="rounded-xl h-11 text-sm"
+                      />
+                      {partnerStatus === "resolving" && (
+                        <p className="text-xs text-gray-400 mt-1">Looking up partner…</p>
+                      )}
+                      {partnerStatus === "found" && (
+                        <p className="text-xs text-green mt-1">✓ {resolvedPartnerName}</p>
+                      )}
+                      {partnerStatus === "not_found" && (
+                        <p className="text-xs text-red mt-1">No user found with that email.</p>
+                      )}
+                      {partnerStatus === "not_partner" && (
+                        <p className="text-xs text-red mt-1">This user does not have the partner role.</p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  <FormField control={offerForm.control} name="isActive" render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-xl border p-4 bg-gray-50/50">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">Active Status</FormLabel>
+                        <p className="text-xs text-gray-400">Toggle visibility on the client application.</p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          className="data-[state=checked]:bg-blue"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )} />
+                </>
+              )}
+
+              <Button type="submit" className="w-full bg-blue text-white rounded-xl h-11" disabled={createMutation.isPending || updateMutation.isPending}>
+                {(createMutation.isPending || updateMutation.isPending) ? "Saving..." : editingOffer ? "Save Changes" : "Create Offer"}
               </Button>
             </form>
           </Form>

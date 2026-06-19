@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getFees, toggleFee, updateFee, initializeFees, createFee } from "@/lib/financeService";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useRole } from "@/hooks/useRole";
 import { MoneyCell } from "@/components/ui/MoneyCell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -94,6 +95,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 
 export default function FeeConfigPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [editingFee, setEditingFee] = useState<any>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isInitOpen, setIsInitOpen] = useState(false);
@@ -102,6 +104,7 @@ export default function FeeConfigPage() {
   const { data: feesRaw, isLoading } = useQuery({
     queryKey: ["fees"],
     queryFn: getFees,
+    enabled: isAdmin,
   });
 
   const fees: any[] = Array.isArray(feesRaw) ? feesRaw : feesRaw?.data ?? [];
@@ -304,30 +307,43 @@ export default function FeeConfigPage() {
         )}
       </div>
 
-      {/* Active toggle */}
+      {/* Active toggle — admin only */}
       <div className="shrink-0 flex items-center gap-2">
-        <Switch
-          checked={!!fee.isActive}
-          onCheckedChange={() => toggleMutation.mutate(fee.id)}
-          disabled={toggleMutation.isPending}
-        />
-        <span className={cn(
-          "text-xs font-medium hidden sm:block",
-          fee.isActive ? "text-green-600" : "text-gray-400"
-        )}>
-          {fee.isActive ? "Active" : "Off"}
-        </span>
+        {isAdmin ? (
+          <>
+            <Switch
+              checked={!!fee.isActive}
+              onCheckedChange={() => toggleMutation.mutate(fee.id)}
+              disabled={toggleMutation.isPending}
+            />
+            <span className={cn(
+              "text-xs font-medium hidden sm:block",
+              fee.isActive ? "text-green-600" : "text-gray-400"
+            )}>
+              {fee.isActive ? "Active" : "Off"}
+            </span>
+          </>
+        ) : (
+          <span className={cn(
+            "text-xs font-medium hidden sm:block",
+            fee.isActive ? "text-green-600" : "text-gray-400"
+          )}>
+            {fee.isActive ? "Active" : "Off"}
+          </span>
+        )}
       </div>
 
-      {/* Edit */}
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 w-8 p-0 shrink-0 text-gray-300 hover:text-blue hover:bg-blue/10 opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={() => openEdit(fee)}
-      >
-        <Edit className="w-3.5 h-3.5" />
-      </Button>
+      {/* Edit — admin only */}
+      {isAdmin && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0 shrink-0 text-gray-300 hover:text-blue hover:bg-blue/10 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => openEdit(fee)}
+        >
+          <Edit className="w-3.5 h-3.5" />
+        </Button>
+      )}
     </div>
     );
   };
@@ -425,25 +441,38 @@ export default function FeeConfigPage() {
 
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">
-      <PageHeader
-        title="Fee Configurations"
+      {!isAdmin && (
+        <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+            <Lock className="w-6 h-6 text-gray-400" />
+          </div>
+          <p className="text-base font-semibold text-gray-700">Admin Access Required</p>
+          <p className="text-sm text-gray-400 max-w-xs">Fee configurations are restricted to administrators.</p>
+        </div>
+      )}
+      {isAdmin && (
+        <>
+        <PageHeader
+          title="Fee Configurations"
         subtitle="Manage platform fee structures and markup settings."
         actions={
-          <>
-            <Button
-              variant="outline"
-              className="border-gray-200 gap-2 h-9 text-sm"
-              onClick={() => setIsInitOpen(true)}
-            >
-              <Zap className="w-4 h-4 text-amber-500" /> Init SafeHaven Fees
-            </Button>
-            <Button
-              className="bg-blue hover:bg-darkBlue text-white gap-2 h-9 text-sm"
-              onClick={() => { setEditingFee(null); form.reset(); setIsCreateOpen(true); }}
-            >
-              <Plus className="w-4 h-4" /> New Fee Config
-            </Button>
-          </>
+          isAdmin ? (
+            <>
+              <Button
+                variant="outline"
+                className="border-gray-200 gap-2 h-9 text-sm"
+                onClick={() => setIsInitOpen(true)}
+              >
+                <Zap className="w-4 h-4 text-amber-500" /> Init SafeHaven Fees
+              </Button>
+              <Button
+                className="bg-blue hover:bg-darkBlue text-white gap-2 h-9 text-sm"
+                onClick={() => { setEditingFee(null); form.reset(); setIsCreateOpen(true); }}
+              >
+                <Plus className="w-4 h-4" /> New Fee Config
+              </Button>
+            </>
+          ) : undefined
         }
       />
 
@@ -805,6 +834,8 @@ export default function FeeConfigPage() {
           </Form>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 }

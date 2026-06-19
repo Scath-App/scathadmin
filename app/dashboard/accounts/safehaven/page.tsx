@@ -11,12 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Search, X } from "lucide-react";
+import { Search, X, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 const LIMIT = 20;
 
 export default function SafeHavenAccountsPage() {
+  const { isAdmin } = useRole();
   const [page, setPage] = useState(0);
   const [isSubAccount, setIsSubAccount] = useState<boolean | undefined>(undefined);
   const [searchNumber, setSearchNumber] = useState("");
@@ -31,6 +33,7 @@ export default function SafeHavenAccountsPage() {
         limit: LIMIT,
         ...(isSubAccount !== undefined ? { isSubAccount } : {}),
       }),
+    enabled: isAdmin,
   });
 
   const accounts: any[] = data?.data ?? [];
@@ -51,7 +54,7 @@ export default function SafeHavenAccountsPage() {
   };
 
   const columns: Column[] = [
-    { key: "id", header: "Account ID", className: "font-mono text-xs text-gray-500" },
+    { key: "_id", header: "Account ID", className: "font-mono text-xs text-gray-500" },
     {
       key: "accountNumber",
       header: "Account Number",
@@ -78,6 +81,18 @@ export default function SafeHavenAccountsPage() {
     },
   ];
 
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-3 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <Lock className="w-6 h-6 text-gray-400" />
+        </div>
+        <p className="text-base font-semibold text-gray-700">Admin Access Required</p>
+        <p className="text-sm text-gray-400 max-w-xs">Safe Haven accounts are restricted to administrators.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">
       <PageHeader
@@ -96,7 +111,7 @@ export default function SafeHavenAccountsPage() {
         </label>
 
         {/* Search by number */}
-        <div className="flex items-center gap-2 flex-1 max-w-sm">
+        <div className="flex items-center gap-2 flex-1 max-w-sm ml-auto">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input

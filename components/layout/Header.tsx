@@ -1,9 +1,12 @@
 "use client";
 
 import { useAuthStore } from "@/hooks/useAuthStore";
+import { useRole } from "@/hooks/useRole";
 import { useQuery } from "@tanstack/react-query";
 import { getAccountDashboard } from "@/lib/financeService";
 import { Button } from "@/components/ui/button";
+import { SystemStatus } from "./SystemStatus";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, Bell, EyeOff } from "lucide-react";
+import { Menu, Bell, EyeOff, Eye } from "lucide-react";
+import { useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -23,6 +27,7 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   navSections,
   dashboardItem,
@@ -34,14 +39,23 @@ import {
 
 export function Header() {
   const { user, logout } = useAuthStore();
+  const queryClient = useQueryClient();
   const pathname = usePathname();
+  const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+  const { isAdmin, role } = useRole();
+  const isAdminOrStaff = isAdmin || role === "STAFF";
+
+  const handleLogout = () => {
+    queryClient.clear(); // wipe all cached data so next user starts fresh
+    logout();
+  };
 
   const isDashboardHome = pathname === "/dashboard" || pathname === "/dashboard/";
 
   const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
     queryKey: ["accountDashboard-header"],
     queryFn: () => getAccountDashboard(0, 50),
-    enabled: isDashboardHome,
+    enabled: isDashboardHome && isAdminOrStaff,
   });
 
   const accounts = dashboardData?.data ?? [];
@@ -105,7 +119,8 @@ export function Header() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
+            {isAdminOrStaff && <SystemStatus mode="compact" className="text-white" />}
             <Button
               variant="ghost"
               size="icon"
@@ -114,8 +129,9 @@ export function Header() {
               <Bell className="h-5 w-5" />
               <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-yellow border-2 border-blue" />
             </Button>
-            <UserMenu user={user} logout={logout} initials={initials} light />
+            <UserMenu user={user} logout={handleLogout} initials={initials} light />
           </div>
+
         </div>
 
         {/* Balance display */}
@@ -124,10 +140,22 @@ export function Header() {
             Parent Account Balance
           </p>
           <div className="flex items-center gap-3">
-            <EyeOff className="w-5 h-5 text-white/60" />
+            <button 
+              onClick={() => setIsBalanceHidden(!isBalanceHidden)}
+              className="hover:bg-white/10 p-1.5 -ml-1.5 rounded-full transition-colors focus:outline-none"
+              aria-label={isBalanceHidden ? "Show balance" : "Hide balance"}
+            >
+              {isBalanceHidden ? (
+                <EyeOff className="w-5 h-5 text-white/60" />
+              ) : (
+                <Eye className="w-5 h-5 text-white/60" />
+              )}
+            </button>
             <span className="text-4xl font-bold tracking-tight">
               {dashboardLoading ? (
                 <span className="opacity-50">₦ ...,...,...</span>
+              ) : isBalanceHidden ? (
+                <span className="opacity-80">₦ ****</span>
               ) : (
                 <>
                   ₦ {mainBalance.split(".")[0]}
@@ -158,7 +186,8 @@ export function Header() {
         </Sheet>
         <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3.5">
+        {isAdminOrStaff && <SystemStatus mode="compact" />}
         <Button
           variant="ghost"
           size="icon"
@@ -167,8 +196,9 @@ export function Header() {
           <Bell className="h-5 w-5" />
           <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-red-500 border-2 border-white" />
         </Button>
-        <UserMenu user={user} logout={logout} initials={initials} />
+        <UserMenu user={user} logout={handleLogout} initials={initials} />
       </div>
+
     </header>
   );
 }
@@ -281,6 +311,7 @@ function MobileNav({ pathname }: { pathname: string }) {
           </Link>
         </div>
       </nav>
+
     </div>
   );
 }

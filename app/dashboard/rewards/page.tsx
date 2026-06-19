@@ -17,6 +17,7 @@ import {
   sendRewards,
 } from "@/lib/rewardsService";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useRole } from "@/hooks/useRole";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -139,7 +140,6 @@ function HistoryTab() {
   const allRows = data?.pages.flatMap((page) => page.data) ?? [];
 
   const columns = [
-    { label: "ID", key: "id" as const },
     { label: "User", key: "user" as const },
     { label: "Date", key: "createdAt" as const },
     { label: "Type", key: "type" as const },
@@ -150,7 +150,7 @@ function HistoryTab() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <BalanceCard />
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -192,9 +192,6 @@ function HistoryTab() {
               ) : (
                 allRows.map((row) => (
                   <TableRow key={row.id} className="hover:bg-gray-50/50">
-                    <TableCell className="font-mono text-xs text-gray-500">
-                      #{row.id}
-                    </TableCell>
                     <TableCell>
                       <RewardsUserCell row={row} />
                     </TableCell>
@@ -477,6 +474,7 @@ type Tab = "history" | "send";
 
 export default function RewardsPage() {
   const [tab, setTab] = useState<Tab>("history");
+  const { isAdmin } = useRole();
 
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">
@@ -486,23 +484,25 @@ export default function RewardsPage() {
       />
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
-        {(["history", "send"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-              tab === t
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t === "history" ? "History" : "Send Coins"}
-          </button>
-        ))}
-      </div>
+      {isAdmin && (
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+          {(["history", "send"] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                tab === t
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {t === "history" ? "History" : "Send Coins"}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {tab === "history" ? <HistoryTab /> : <SendTab />}
+      {tab === "history" || !isAdmin ? <HistoryTab /> : <SendTab />}
     </div>
   );
 }

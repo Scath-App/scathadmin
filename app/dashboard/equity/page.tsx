@@ -24,8 +24,9 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Edit, Trash2, TrendingUp } from "lucide-react";
+import { Plus, Edit, Trash2, TrendingUp, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 // All money fields in these schemas are in NAIRA (what the admin types).
@@ -36,8 +37,8 @@ const createSchema = z.object({
   description: z.string().min(1, "Required"),
   sharePrice: z.coerce.number().min(0),
   valuation: z.coerce.number().min(0),
-  mrr: z.coerce.number().min(0),
-  arr: z.coerce.number().min(0),
+  mrr: z.coerce.number().min(0).optional(),
+  arr: z.coerce.number().min(0).optional(),
   totalShares: z.coerce.number().min(0),
   availableShares: z.coerce.number().min(0),
   lockInPeriod: z.coerce.number().min(0),
@@ -52,8 +53,8 @@ const editSchema = createSchema.extend({
 /** Used for the standalone "Update Metrics" modal */
 const metricsSchema = z.object({
   valuation: z.coerce.number().min(0),
-  mrr: z.coerce.number().min(0),
-  arr: z.coerce.number().min(0),
+  mrr: z.coerce.number().min(0).optional(),
+  arr: z.coerce.number().min(0).optional(),
 });
 
 
@@ -66,6 +67,7 @@ const LIMIT = 20;
 
 export default function EquityListingsPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [page, setPage] = useState(1);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEquity, setEditingEquity] = useState<any>(null);
@@ -75,6 +77,7 @@ export default function EquityListingsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["equityListings", page],
     queryFn: () => getEquityListings(page, LIMIT),
+    enabled: isAdmin,
   });
 
   const listings: any[] = data?.data ?? [];
@@ -241,7 +244,7 @@ export default function EquityListingsPage() {
       key: "id",
       header: "Actions",
       headerClassName: "text-right",
-      render: (id, row) => (
+      render: (id, row) => isAdmin ? (
         <div className="flex items-center justify-end gap-1">
           <Button
             size="sm" variant="ghost" className="text-amber-600 hover:bg-amber-50"
@@ -257,9 +260,21 @@ export default function EquityListingsPage() {
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
         </div>
-      ),
+      ) : <div className="text-right text-xs text-gray-300">—</div>,
     },
   ];
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-3 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <Lock className="w-6 h-6 text-gray-400" />
+        </div>
+        <p className="text-base font-semibold text-gray-700">Admin Access Required</p>
+        <p className="text-sm text-gray-400 max-w-xs">Equity listings are restricted to administrators.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">
@@ -267,9 +282,11 @@ export default function EquityListingsPage() {
         title="Equity Listings"
         subtitle="Manage all equity listings. Valuation changes auto-create history entries."
         actions={
-          <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
-            <Plus className="w-4 h-4" /> New Listing
-          </Button>
+          isAdmin ? (
+            <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
+              <Plus className="w-4 h-4" /> New Listing
+            </Button>
+          ) : undefined
         }
       />
 
@@ -321,10 +338,10 @@ export default function EquityListingsPage() {
                     <FormItem><FormLabel>Valuation (₦)</FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={createForm.control} name="mrr" render={({ field }) => (
-                    <FormItem><FormLabel>MRR (₦)</FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>MRR (₦) <span className="text-gray-400 font-normal text-xs">(Optional)</span></FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={createForm.control} name="arr" render={({ field }) => (
-                    <FormItem><FormLabel>ARR (₦)</FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>ARR (₦) <span className="text-gray-400 font-normal text-xs">(Optional)</span></FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={createForm.control} name="totalShares" render={({ field }) => (
                     <FormItem><FormLabel>Total Shares</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
@@ -374,10 +391,10 @@ export default function EquityListingsPage() {
                     <FormItem><FormLabel>Valuation (₦)</FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={editForm.control} name="mrr" render={({ field }) => (
-                    <FormItem><FormLabel>MRR (₦)</FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>MRR (₦) <span className="text-gray-400 font-normal text-xs">(Optional)</span></FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={editForm.control} name="arr" render={({ field }) => (
-                    <FormItem><FormLabel>ARR (₦)</FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>ARR (₦) <span className="text-gray-400 font-normal text-xs">(Optional)</span></FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={editForm.control} name="totalShares" render={({ field }) => (
                     <FormItem><FormLabel>Total Shares</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>

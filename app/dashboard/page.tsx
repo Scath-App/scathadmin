@@ -6,6 +6,7 @@ import { useQueries } from "@tanstack/react-query";
 import { getPendingPayouts } from "@/lib/financeService";
 import { getAuditLogs, enrichAuditLog } from "@/lib/userService";
 import { getAdminAnalyticsOverview } from "@/lib/analyticsService";
+import { getOffers, getPendingOfferRequests } from "@/lib/offerService";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,7 +23,7 @@ import {
 import {
   Users, DollarSign, Clock, TrendingUp, ArrowRight,
   AlertCircle, CheckCircle2, ChevronRight,
-  Briefcase, Receipt, BarChart3,
+  Briefcase, Receipt, BarChart3, ShoppingBag, FileText
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -30,16 +31,247 @@ const CHART_COLORS = ["#074D97", "#53A753", "#FFC52F", "#5727F5", "#EA4335", "#0
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const role = (user?.role || "").toUpperCase();
+  const isAdminOrStaff = role === "ADMIN" || role === "STAFF";
+  const isPartner = role === "PARTNER";
 
-  const results = useQueries({
+  // Admin/Staff queries
+  const adminResults = useQueries({
     queries: [
-      { queryKey: ["analytics-overview"], queryFn: () => getAdminAnalyticsOverview("30d") },
-      { queryKey: ["pendingPayouts-count"], queryFn: getPendingPayouts },
-      { queryKey: ["auditLogs-recent"], queryFn: () => getAuditLogs(0, 10) },
+      { 
+        queryKey: ["analytics-overview"], 
+        queryFn: () => getAdminAnalyticsOverview("30d"),
+        enabled: isAdminOrStaff,
+      },
+      { 
+        queryKey: ["pendingPayouts-count"], 
+        queryFn: getPendingPayouts,
+        enabled: isAdminOrStaff,
+      },
+      { 
+        queryKey: ["auditLogs-recent"], 
+        queryFn: () => getAuditLogs(0, 10),
+        enabled: isAdminOrStaff,
+      },
     ],
   });
 
-  const [analyticsResult, payoutsResult, logsResult] = results;
+  // Partner queries
+  const partnerResults = useQueries({
+    queries: [
+      {
+        queryKey: ["offers", 0],
+        queryFn: () => getOffers(0, 100),
+        enabled: isPartner,
+      },
+      {
+        queryKey: ["pendingOfferRequests"],
+        queryFn: getPendingOfferRequests,
+        enabled: isPartner,
+      },
+    ],
+  });
+
+  // ── PARTNER DASHBOARD ───────────────────────────────────────────────────────
+  if (isPartner) {
+    const [offersQuery, requestsQuery] = partnerResults;
+    const offers = Array.isArray(offersQuery.data) ? offersQuery.data : [];
+    const pending = Array.isArray(requestsQuery.data) ? requestsQuery.data : (requestsQuery.data as any)?.data ?? [];
+
+    const totalOffers = offers.length;
+    const activeOffers = offers.filter((o: any) => o.isActive).length;
+    const pendingRequests = pending.filter(
+      (r: any) => r.status === "clicked" || r.status === "CLICKED" || r.status === "pending" || r.status === "PENDING"
+    );
+    const pendingRequestsCount = pendingRequests.length;
+
+    const isLoading = offersQuery.isLoading || requestsQuery.isLoading;
+    const recentRequests = pending.slice(0, 5);
+
+    const partnerQuickActions = [
+      {
+        label: "Manage Offers",
+        desc: "View & edit your listed services",
+        href: "/dashboard/offers",
+        icon: ShoppingBag,
+        color: "bg-blue/10 text-blue border-blue/20 hover:bg-blue/15",
+      },
+      {
+        label: "Service Requests",
+        desc: "Review requests & submit quotes",
+        href: "/dashboard/service-requests",
+        icon: FileText,
+        color: "bg-yellow/10 text-yellow border-yellow/20 hover:bg-yellow/15",
+        badge: pendingRequestsCount > 0 ? pendingRequestsCount : null,
+      },
+    ];
+
+    return (
+      <div className="px-6 sm:px-8 pt-8 pb-16 space-y-8 animate-in fade-in duration-500">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+            Welcome back, {user?.firstName || "Partner"}
+          </h1>
+          <p className="text-sm text-gray-500">
+            Manage your service offerings, check click metrics, and submit quotes for user requests.
+          </p>
+        </div>
+
+        {!isLoading && pendingRequestsCount > 0 && (
+          <div className="relative group overflow-hidden bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200/60 shadow-[0_2px_10px_rgb(250,204,21,0.1)] rounded-2xl px-5 py-3.5 flex items-center gap-3 transition-all hover:shadow-[0_4px_20px_rgb(250,204,21,0.15)] hover:border-yellow-300/50">
+            <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-transparent pointer-events-none" />
+            <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-yellow-100/80 shrink-0">
+              <div className="absolute inset-0 rounded-full border border-yellow-400 animate-ping opacity-20" />
+              <AlertCircle className="w-4 h-4 text-yellow-600" />
+            </div>
+            <p className="text-sm font-medium text-yellow-900 flex-1 relative z-10">
+              You have <span className="font-bold text-yellow-700">{pendingRequestsCount} pending service request{pendingRequestsCount !== 1 ? "s" : ""}</span> awaiting quotes.
+            </p>
+            <Link
+              href="/dashboard/service-requests"
+              className="flex items-center gap-1.5 text-xs font-semibold text-yellow-700 bg-white/60 hover:bg-white px-3 py-1.5 rounded-lg transition-colors relative z-10 backdrop-blur-sm"
+            >
+              Review <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <StatCard
+            title="Total Offers"
+            value={isLoading ? "..." : String(totalOffers)}
+            icon={ShoppingBag}
+            colorClass="text-blue"
+            iconBgClass="bg-faintSky"
+          />
+          <StatCard
+            title="Active Offers"
+            value={isLoading ? "..." : String(activeOffers)}
+            icon={CheckCircle2}
+            colorClass="text-greeny"
+            iconBgClass="bg-greeny/10"
+          />
+          <StatCard
+            title="Pending Requests"
+            value={isLoading ? "..." : String(pendingRequestsCount)}
+            icon={Clock}
+            colorClass="text-yellow"
+            iconBgClass="bg-yellow/10"
+          />
+        </div>
+
+        <div>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+            {partnerQuickActions.map((action) => (
+              <Link key={action.href} href={action.href}>
+                <div
+                  className={cn(
+                    "relative group overflow-hidden rounded-2xl border px-4 py-5 flex flex-col gap-3 cursor-pointer transition-all duration-300",
+                    "hover:-translate-y-1 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)]",
+                    action.color
+                  )}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                  {action.badge != null && (
+                    <span className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shadow-sm shadow-red-500/30">
+                      {action.badge}
+                    </span>
+                  )}
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="p-2.5 rounded-xl bg-white/60 backdrop-blur-sm shadow-sm ring-1 ring-white/50">
+                      <action.icon className="w-5 h-5" strokeWidth={2.5} />
+                    </div>
+                    <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" />
+                  </div>
+                  <div className="relative z-10 mt-1">
+                    <p className="text-sm font-bold tracking-tight leading-tight">{action.label}</p>
+                    <p className="text-[11px] opacity-75 mt-1 leading-tight font-medium">{action.desc}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/30">
+            <div>
+              <h3 className="font-bold text-gray-900">Recent Service Requests</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Track recent customer clicks and quote statuses</p>
+            </div>
+            <Button variant="ghost" size="sm" className="text-blue text-sm" asChild>
+              <Link href="/dashboard/service-requests">View all</Link>
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent bg-gray-50/80 border-b-gray-100/80">
+                  {["Offer Name", "Status", "Customer Email", "Time", "Action"].map((h) => (
+                    <TableHead key={h} className="font-semibold text-gray-700 text-xs uppercase tracking-wide">
+                      {h}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {[1, 2, 3, 4, 5].map((c) => (
+                        <TableCell key={c}><Skeleton className="h-4 w-full" /></TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : recentRequests.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-gray-400 h-20 text-sm">
+                      <div className="flex flex-col items-center gap-1.5">
+                        <CheckCircle2 className="w-5 h-5 text-gray-300" />
+                        No service requests yet
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  recentRequests.map((req: any) => (
+                    <TableRow key={req.id} className="hover:bg-gray-50/80 transition-colors border-b-gray-100/60">
+                      <TableCell className="font-medium text-sm text-gray-950">
+                        {req.offer?.name ?? req.offerName ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={req.status} />
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-700">
+                        {req.user?.email ?? `User #${req.userId}`}
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-400">
+                        {req.clickedAt ? format(new Date(req.clickedAt), "dd MMM, HH:mm") : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {(req.status === "clicked" || req.status === "CLICKED") ? (
+                          <Link href="/dashboard/service-requests" className="text-xs text-blue hover:underline font-semibold">
+                            Submit Quote
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ADMIN / STAFF DASHBOARD ─────────────────────────────────────────────────
+  const [analyticsResult, payoutsResult, logsResult] = adminResults;
 
   const analytics = analyticsResult.data;
   const cards = analytics?.cards;
@@ -61,7 +293,6 @@ export default function DashboardPage() {
   const accounts = charts?.treasuryByPurpose ?? [];
   const recentLogs: any[] = (logsResult.data?.data ?? []).map(enrichAuditLog);
 
-  // Chart data
   const purposeData = accounts.map((account: any) => ({
     name: account.purpose,
     value: account.balanceInNaira,
@@ -73,38 +304,6 @@ export default function DashboardPage() {
     Deleted: d.deletedUsers,
   }));
 
-  // ── Attention items ──────────────────────────────────────────────────────────
-  const attentionItems = [
-    {
-      label: "Pending Payouts",
-      count: payoutsResult.isLoading ? null : pendingCount,
-      href: "/dashboard/finance/payouts",
-      urgent: pendingCount > 0,
-      icon: Clock,
-      color: "text-yellow",
-      bg: "bg-yellow/10 border-yellow/20",
-    },
-    {
-      label: "Platform Accounts",
-      count: analyticsResult.isLoading ? null : accounts.length,
-      href: "/dashboard/accounts",
-      urgent: false,
-      icon: BarChart3,
-      color: "text-blue",
-      bg: "bg-blue/10 border-blue/20",
-    },
-    {
-      label: "Total Users",
-      count: analyticsResult.isLoading ? null : totalUsers,
-      href: "/dashboard/users",
-      urgent: false,
-      icon: Users,
-      color: "text-greeny",
-      bg: "bg-greeny/10 border-greeny/20",
-    },
-  ];
-
-  // ── Quick actions ────────────────────────────────────────────────────────────
   const quickActions = [
     {
       label: "Manage Users",
@@ -152,9 +351,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="px-6 sm:px-8 pt-8 pb-16 space-y-8">
-
-      {/* ── Needs Attention strip ─────────────────────────────────────────── */}
+    <div className="px-6 sm:px-8 pt-8 pb-16 space-y-8 animate-in fade-in duration-500">
       {!payoutsResult.isLoading && pendingCount > 0 && (
         <div className="relative group overflow-hidden bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200/60 shadow-[0_2px_10px_rgb(250,204,21,0.1)] rounded-2xl px-5 py-3.5 flex items-center gap-3 transition-all hover:shadow-[0_4px_20px_rgb(250,204,21,0.15)] hover:border-yellow-300/50">
           <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-transparent pointer-events-none" />
@@ -163,8 +360,7 @@ export default function DashboardPage() {
             <AlertCircle className="w-4 h-4 text-yellow-600" />
           </div>
           <p className="text-sm font-medium text-yellow-900 flex-1 relative z-10">
-            <span className="font-bold text-yellow-700">{pendingCount} payout{pendingCount !== 1 ? "s" : ""}</span>{" "}
-            awaiting approval
+            <span className="font-bold text-yellow-700">{pendingCount} payout{pendingCount !== 1 ? "s" : ""}</span> awaiting approval
           </p>
           <Link
             href="/dashboard/finance/payouts"
@@ -175,7 +371,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Stat cards ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Total Users"
@@ -199,18 +394,11 @@ export default function DashboardPage() {
           iconBgClass="bg-greeny/10"
         />
         <StatCard
-          title="Settled Revenue"
+          title="Revenue"
           value={analyticsResult.isLoading ? "..." : settledRevenue}
           icon={TrendingUp}
           colorClass="text-purple"
           iconBgClass="bg-purple/10"
-        />
-        <StatCard
-          title="Unsettled Revenue"
-          value={analyticsResult.isLoading ? "..." : (cards?.unsettledRevenueInNaira != null ? `₦${cards.unsettledRevenueInNaira.toLocaleString("en-NG", { minimumFractionDigits: 0 })}` : "—")}
-          icon={Receipt}
-          colorClass="text-orange-500"
-          iconBgClass="bg-orange-50"
         />
         <StatCard
           title="Rewards Balance"
@@ -228,7 +416,6 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ── Quick actions ─────────────────────────────────────────────────── */}
       <div>
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
           Quick Actions
@@ -243,9 +430,7 @@ export default function DashboardPage() {
                   action.color
                 )}
               >
-                {/* Subtle gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                
                 {action.badge != null && (
                   <span className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shadow-sm shadow-red-500/30">
                     {action.badge}
@@ -267,9 +452,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Charts row ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* User Growth area chart */}
         <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-900">User Growth</h3>
@@ -311,7 +494,6 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Balance distribution pie chart */}
         <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-900">Balance by Purpose</h3>
@@ -351,7 +533,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Recent Audit Logs ─────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-100/80 flex items-center justify-between bg-gray-50/30">
           <div>

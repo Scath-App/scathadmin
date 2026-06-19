@@ -10,17 +10,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 export default function ReferralPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ["referralSettings"],
     queryFn: getReferralSettings,
+    enabled: isAdmin,
     onSuccess: (d: any) => {
       if (!editing) setForm(d);
     },
@@ -39,7 +42,14 @@ export default function ReferralPage() {
   });
 
   const handleSave = () => {
-    const { referredUserBonusAmount: _skip, ...payload } = form;
+    const { 
+      id, 
+      createdAt, 
+      updatedAt, 
+      deletedAt, 
+      referredUserBonusAmount: _skip, 
+      ...payload 
+    } = form;
     updateMutation.mutate(payload);
   };
 
@@ -91,6 +101,8 @@ export default function ReferralPage() {
     </div>
   );
 
+
+
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">
       <PageHeader
@@ -118,13 +130,6 @@ export default function ReferralPage() {
         </div>
         <div className="px-6">
           {field("referrerBonusAmount", "Referrer Bonus Amount", "number")}
-          {field(
-            "referredUserBonusAmount",
-            "Referred User Bonus Amount",
-            "number",
-            true,
-            "Always normalized to 0 server-side. Read-only.",
-          )}
           {field("kycRequired", "KYC Required", "toggle")}
           {field("isActive", "Program Active", "toggle")}
           {field("maxReferralsPerUser", "Max Referrals Per User", "number")}

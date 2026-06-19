@@ -12,6 +12,7 @@ export interface Column<T = any> {
   key: string;
   header: string;
   render?: (value: any, row: T, index: number) => ReactNode;
+  renderHeader?: () => ReactNode;
   className?: string;
   headerClassName?: string;
 }
@@ -78,7 +79,7 @@ export function DataTable<T = any>({
                   key={col.key}
                   className={`h-11 px-6 font-semibold text-gray-500 text-[11px] uppercase tracking-wider ${col.headerClassName ?? ""}`}
                 >
-                  {col.header}
+                  {col.renderHeader ? col.renderHeader() : col.header}
                 </TableHead>
               ))}
             </TableRow>

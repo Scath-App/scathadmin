@@ -65,6 +65,7 @@ export const navSections: NavSection[] = [
           { label: "All Users", href: "/dashboard/users", icon: Users2 },
           { label: "Audit Logs", href: "/dashboard/users/audit-logs", icon: ShieldAlert },
         ],
+        roles: ["ADMIN", "STAFF"],
       },
     ],
   },
@@ -80,6 +81,7 @@ export const navSections: NavSection[] = [
           { label: "Treasury Dashboard", href: "/dashboard/finance/treasury", icon: BarChart3 },
           { label: "Payouts", href: "/dashboard/finance/payouts", icon: ArrowRightLeft },
         ],
+        roles: ["ADMIN", "STAFF"],
       },
     ],
   },
@@ -94,6 +96,7 @@ export const navSections: NavSection[] = [
         children: [
           { label: "Opportunities", href: "/dashboard/investments", icon: Briefcase },
         ],
+        roles: ["ADMIN", "STAFF"],
       },
       {
         label: "Equity",
@@ -102,6 +105,8 @@ export const navSections: NavSection[] = [
           { label: "Listings", href: "/dashboard/equity", icon: TrendingUp },
           { label: "Exit Requests", href: "/dashboard/equity/exit-requests", icon: LogOut },
         ],
+        // Equity write endpoints are ADMIN-only; staff can view but backend guards reads too
+        roles: ["ADMIN"],
       },
       {
         label: "Savebox",
@@ -110,6 +115,7 @@ export const navSections: NavSection[] = [
           { label: "Configurations", href: "/dashboard/savebox", icon: Settings2 },
           { label: "Portfolios", href: "/dashboard/savebox/portfolios", icon: Briefcase },
         ],
+        roles: ["ADMIN", "STAFF"],
       },
     ],
   },
@@ -123,8 +129,25 @@ export const navSections: NavSection[] = [
         icon: ShoppingBag,
         children: [
           { label: "All Offers", href: "/dashboard/offers", icon: ShoppingBag },
+          { label: "Service Requests", href: "/dashboard/service-requests", icon: FileText },
         ],
-        roles: ["ADMIN", "STAFF", "PARTNER"],
+        roles: ["ADMIN"],
+      },
+      {
+        label: "Offers",
+        icon: ShoppingBag,
+        children: [
+          { label: "All Offers", href: "/dashboard/offers", icon: ShoppingBag },
+        ],
+        roles: ["STAFF", "PARTNER"],
+      },
+      {
+        label: "Service Requests",
+        icon: FileText,
+        children: [
+          { label: "Service Requests", href: "/dashboard/service-requests", icon: FileText },
+        ],
+        roles: ["PARTNER"],
       },
       {
         label: "Referrals",
@@ -132,6 +155,7 @@ export const navSections: NavSection[] = [
         children: [
           { label: "Referral Settings", href: "/dashboard/referrals", icon: UserPlus },
         ],
+        roles: ["ADMIN", "STAFF"],
       },
       {
         label: "Rewards",
@@ -139,6 +163,7 @@ export const navSections: NavSection[] = [
         children: [
           { label: "Manage Rewards", href: "/dashboard/rewards", icon: Gift },
         ],
+        roles: ["ADMIN", "STAFF"],
       },
     ],
   },
@@ -154,6 +179,8 @@ export const navSections: NavSection[] = [
           { label: "Configurations", href: "/dashboard/fees", icon: Receipt },
           { label: "Revenue Report", href: "/dashboard/fees/revenue", icon: BarChart3 },
         ],
+        // Fee config & revenue report call ADMIN-only backend endpoints
+        roles: ["ADMIN"],
       },
       {
         label: "Accounts",
@@ -162,6 +189,8 @@ export const navSections: NavSection[] = [
           { label: "Local Accounts", href: "/dashboard/accounts", icon: Landmark },
           { label: "Safe Haven", href: "/dashboard/accounts/safehaven", icon: Building2 },
         ],
+        // Account endpoints are ADMIN-only
+        roles: ["ADMIN"],
       },
     ],
   },
@@ -176,6 +205,7 @@ export const navSections: NavSection[] = [
         children: [
           { label: "Platform Analytics", href: "/dashboard/analytics", icon: LineChart },
         ],
+        roles: ["ADMIN", "STAFF"],
       },
     ],
   },

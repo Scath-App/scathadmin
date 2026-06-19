@@ -23,11 +23,13 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Edit } from "lucide-react";
+import { Plus, Edit, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 export default function PortfoliosPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [includeInactive, setIncludeInactive] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState<any>(null);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -12,7 +12,7 @@ interface ConfirmModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  message?: string;
+  message?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   /** Renders a reason/note textarea */
@@ -66,7 +66,7 @@ export function ConfirmModal({
         </DialogHeader>
 
         {message && (
-          <p className="text-sm text-gray-600 -mt-1">{message}</p>
+          <div className="text-sm text-gray-600 -mt-1">{message}</div>
         )}
 
         {reasonField && (

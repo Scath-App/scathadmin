@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getAccounts, createMainAccount, updateAccountPurpose,
-  syncSingleAccount, syncAllAccounts,
+  syncSingleAccount, syncAllAccounts, getAccountByNumberLocal
 } from "@/lib/financeService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -21,8 +21,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, RefreshCw, RefreshCcw } from "lucide-react";
+import { Plus, RefreshCw, RefreshCcw, Search, X, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -48,6 +49,7 @@ const LIMIT = 25;
 
 export default function AccountsPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [page, setPage] = useState(1);
   const [isMainFilter, setIsMainFilter] = useState<boolean | undefined>(undefined);
   const [isSubFilter, setIsSubFilter] = useState<boolean | undefined>(undefined);
@@ -55,6 +57,10 @@ export default function AccountsPage() {
   const [editingPurposeId, setEditingPurposeId] = useState<number | null>(null);
   const [newPurpose, setNewPurpose] = useState("");
   const [syncAllResult, setSyncAllResult] = useState<any>(null);
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
+  const [searchNumber, setSearchNumber] = useState("");
+  const [searchResult, setSearchResult] = useState<any>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["accounts", page, isMainFilter, isSubFilter],
@@ -65,10 +71,25 @@ export default function AccountsPage() {
         ...(isMainFilter !== undefined ? { isMainAccount: isMainFilter } : {}),
         ...(isSubFilter !== undefined ? { isSubAccount: isSubFilter } : {}),
       }),
+    enabled: isAdmin,
   });
 
   const accounts: any[] = data?.data ?? [];
   const meta = data?.meta ?? {};
+
+  const handleSearch = async () => {
+    if (!searchNumber.trim()) return;
+    setSearchLoading(true);
+    try {
+      const result = await getAccountByNumberLocal(searchNumber.trim());
+      setSearchResult(result);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message ?? "Account not found.");
+      setSearchResult(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   const form = useForm<z.infer<typeof createAccountSchema>>({
     resolver: zodResolver(createAccountSchema) as any,
@@ -104,7 +125,7 @@ export default function AccountsPage() {
   });
 
   const syncOneMutation = useMutation({
-    mutationFn: (id: number) => syncSingleAccount(id),
+    mutationFn: (accountId: string) => syncSingleAccount(accountId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success("Account synced.");
@@ -115,10 +136,20 @@ export default function AccountsPage() {
   const syncAllMutation = useMutation({
     mutationFn: syncAllAccounts,
     onSuccess: (res: any) => {
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      const result = res && Object.keys(res).length > 0 ? res : { started: true };
+      // The API returns { status: 'pending', jobId: ... } for background processing
+      const isPending = res?.status === "pending" || res?.jobId;
+      const result = isPending || !res || Object.keys(res).length === 0 ? { started: true } : res;
       setSyncAllResult(result);
-      toast.success("Sync started.");
+      if (result.started) {
+        setIsBackgroundSyncing(true);
+        // Keep the banner active for 15 seconds, then auto-refresh table
+        setTimeout(() => {
+          setIsBackgroundSyncing(false);
+          queryClient.invalidateQueries({ queryKey: ["accounts"] });
+          toast.success("Background sync cycle completed. Balances refreshed.");
+        }, 15000);
+      }
+      toast.success("Sync queued.");
     },
     onError: (e: any) => toast.error(e.response?.data?.message ?? "Sync all failed."),
   });
@@ -142,12 +173,12 @@ export default function AccountsPage() {
         ) : "—",
     },
     {
-      key: "balanceInNaira",
+      key: "accountBalanceInKobo",
       header: "Balance",
       headerClassName: "text-right",
       render: (v, row) => (
         <div className="text-right">
-          <MoneyCell naira={v ?? row.balance} />
+          <MoneyCell kobo={v ?? row.accountBalanceInKobo} />
         </div>
       ),
     },
@@ -209,8 +240,8 @@ export default function AccountsPage() {
                 size="sm"
                 variant="ghost"
                 className="text-xs text-gray-500 h-7"
-                disabled={syncOneMutation.isPending}
-                onClick={() => syncOneMutation.mutate(id)}
+                disabled={syncOneMutation.isPending || !row.accountId}
+                onClick={() => syncOneMutation.mutate(row.accountId)}
               >
                 <RefreshCcw className="w-3.5 h-3.5" />
               </Button>
@@ -221,24 +252,25 @@ export default function AccountsPage() {
     },
   ];
 
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-3 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <Lock className="w-6 h-6 text-gray-400" />
+        </div>
+        <p className="text-base font-semibold text-gray-700">Admin Access Required</p>
+        <p className="text-sm text-gray-400 max-w-xs">Account management is restricted to administrators.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">
       <PageHeader
         title="Local Accounts"
         subtitle="Platform accounts with purpose, balance, and sync status."
         actions={
-          <>
-            {/* Filters */}
-            <div className="flex items-center gap-3 text-sm text-gray-600">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <Switch checked={!!isMainFilter} onCheckedChange={(v) => { setIsMainFilter(v || undefined); setPage(1); }} />
-                Main
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <Switch checked={!!isSubFilter} onCheckedChange={(v) => { setIsSubFilter(v || undefined); setPage(1); }} />
-                Sub
-              </label>
-            </div>
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               className="border-gray-200 gap-2"
@@ -251,9 +283,91 @@ export default function AccountsPage() {
             <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={() => setIsCreateOpen(true)}>
               <Plus className="h-4 w-4" /> Create Account
             </Button>
-          </>
+          </div>
         }
       />
+
+      {/* Controls */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-3 text-sm text-gray-600 flex-none">
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <Switch checked={!!isMainFilter} onCheckedChange={(v) => { setIsMainFilter(v || undefined); setPage(1); }} />
+            Main
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <Switch checked={!!isSubFilter} onCheckedChange={(v) => { setIsSubFilter(v || undefined); setPage(1); }} />
+            Sub
+          </label>
+        </div>
+
+        {/* Search by number */}
+        <div className="flex items-center gap-2 flex-1 max-w-sm ml-auto">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              placeholder="Search by account number..."
+              value={searchNumber}
+              onChange={(e) => setSearchNumber(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              className="pl-9 bg-white border-gray-200"
+            />
+          </div>
+          <Button
+            className="bg-blue text-white"
+            onClick={handleSearch}
+            disabled={searchLoading || !searchNumber.trim()}
+          >
+            {searchLoading ? "Searching..." : "Search"}
+          </Button>
+          {searchResult && (
+            <Button variant="ghost" size="sm" onClick={() => setSearchResult(null)}>
+              <X className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {isBackgroundSyncing && (
+        <div className="bg-blue/5 border border-blue/20 rounded-xl p-4 flex items-center justify-between text-sm text-blue">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            <span className="font-medium">Background sync in progress... balances will update automatically shortly.</span>
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 px-3 text-blue hover:bg-blue/10" onClick={() => setIsBackgroundSyncing(false)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {/* Search result card */}
+      {searchResult && (
+        <div className="bg-white rounded-xl border border-blue/20 shadow-sm p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900">{searchResult.accountName}</h3>
+            <StatusBadge status={searchResult.status} />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Account Number</p>
+              <p className="font-mono font-medium">{searchResult.accountNumber}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Type</p>
+              <p>{searchResult.accountType ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Balance</p>
+              <MoneyCell kobo={searchResult.accountBalanceInKobo} />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Classification</p>
+              <Badge variant="outline" className="text-xs border-blue/20 text-blue bg-faintSky mt-1">
+                {searchResult.isMainAccount ? "Main" : searchResult.isSubAccount ? "Sub" : "User"}
+              </Badge>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <DataTable

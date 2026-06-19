@@ -45,9 +45,10 @@ export default function LoginPage() {
     mutationFn: loginAdmin,
     onSuccess: (data) => {
       const role = (data.user?.role ?? "").toUpperCase();
-      if (role !== "ADMIN") {
+      const ALLOWED_ROLES = ["ADMIN", "STAFF", "PARTNER"];
+      if (!ALLOWED_ROLES.includes(role)) {
         toast.error(
-          `Access denied: your account role ("${data.user?.role ?? "unknown"}") does not have admin privileges.`,
+          `Access denied: your account role ("${data.user?.role ?? "unknown"}") does not have permission to access the dashboard.`,
         );
         return;
       }

@@ -13,6 +13,7 @@ import { RefreshCw, TrendingUp, ArrowDownLeft, Layers, CheckCircle2, Clock } fro
 import { format, subDays } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useRole } from "@/hooks/useRole";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -213,6 +214,7 @@ function RevenuePanel({
 
 export default function RevenueReportPage() {
   const today = new Date();
+  const { isAdmin } = useRole();
   const [startDate, setStartDate] = useState(format(subDays(today, 30), "yyyy-MM-dd"));
   const [endDate,   setEndDate]   = useState(format(today, "yyyy-MM-dd"));
   const [activeRange, setActiveRange] = useState<number | null>(30);
@@ -220,7 +222,7 @@ export default function RevenueReportPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["revenueReport", startDate, endDate],
     queryFn: () => getRevenueReport(startDate, endDate),
-    enabled: !!startDate && !!endDate,
+    enabled: isAdmin && !!startDate && !!endDate,
   });
 
   const settleMutation = useMutation({
@@ -248,6 +250,18 @@ export default function RevenueReportPage() {
   const totalProviderFees =
     (settledData?.summary?.totalProviderFees ?? settledData?.totalProviderFees ?? 0) +
     (unsettledData?.summary?.totalProviderFees ?? unsettledData?.totalProviderFees ?? 0);
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-3 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <TrendingUp className="w-6 h-6 text-gray-400" />
+        </div>
+        <p className="text-base font-semibold text-gray-700">Admin Access Required</p>
+        <p className="text-sm text-gray-400 max-w-xs">Revenue reports are restricted to administrators.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-6">

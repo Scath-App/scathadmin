@@ -12,6 +12,7 @@ import {
   getUserById,
   updateUser,
   updateUserRole,
+  deleteUser,
 } from "@/lib/userService";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { getUserInvoices, reopenPaidInvoice, Invoice } from "@/lib/invoiceService";
@@ -65,8 +66,9 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, Loader2, Trash2, Mail } from "lucide-react";
 import { format } from "date-fns";
+import { CommunicateModal } from "@/components/ui/CommunicateModal";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -180,6 +182,10 @@ export default function UserDetailPage() {
 
   // ── Edit modal state
   const [isEditOpen, setIsEditOpen] = useState(false);
+  // ── Delete modal state
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  // ── Communicate modal state
+  const [isCommunicateOpen, setIsCommunicateOpen] = useState(false);
 
   // Pagination state
   const [invPage, setInvPage] = useState(0);
@@ -220,27 +226,10 @@ export default function UserDetailPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (v: z.infer<typeof editUserSchema>) => {
-      const updates: EditUserPayload = {
-        firstName: v.firstName,
-        lastName: v.lastName,
-        email: v.email,
-        phoneNumber: v.phoneNumber,
-      };
-
       const roleChanged =
         v.role && v.role.toLowerCase() !== profile.role?.toLowerCase();
-      if (roleChanged && ["admin", "partner"].includes(v.role!.toLowerCase())) {
-        await updateUserRole(userId, { role: v.role!.toLowerCase() as "admin" | "partner" });
-      }
-
-      const hasProfileUpdates =
-        updates.firstName !== profile.firstName ||
-        updates.lastName !== profile.lastName ||
-        updates.email !== profile.email ||
-        updates.phoneNumber !== profile.phoneNumber;
-
-      if (hasProfileUpdates) {
-        await updateUser(userId, updates);
+      if (roleChanged && ["admin", "partner", "staff"].includes(v.role!.toLowerCase())) {
+        await updateUserRole(userId, { role: v.role!.toLowerCase() as "admin" | "partner" | "staff" });
       }
     },
     onSuccess: () => {
@@ -252,6 +241,30 @@ export default function UserDetailPage() {
     onError: (e: unknown) => {
       const err = e as { response?: { data?: { message?: string } } };
       toast.error(err.response?.data?.message ?? "Failed to update user.");
+    },
+  });
+
+  // ── Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteUser(userId),
+    onSuccess: (result) => {
+      setIsDeleteOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["deletedUsers"] });
+      if (result.deletionType === "hard") {
+        toast.success(
+          "Account permanently deleted. The user's email and phone number are now available for a new registration.",
+        );
+      } else {
+        toast.success(
+          "Account deactivated successfully. Financial records have been preserved for compliance.",
+        );
+      }
+      router.push("/dashboard/users");
+    },
+    onError: (e: unknown) => {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message ?? "Failed to delete user.");
     },
   });
 
@@ -380,17 +393,17 @@ export default function UserDetailPage() {
           {profileLoading ? (
             <Skeleton className="h-4 w-56 mt-1" />
           ) : (
-            <p className="text-gray-500 text-sm mt-0.5">
-              {profile.email ?? `User ID: ${userId}`}
+            <div className="text-gray-500 text-sm mt-0.5 flex items-center flex-wrap gap-x-3 gap-y-1">
+              <span>{profile.email ?? `User ID: ${userId}`}</span>
               {profile.phoneNumber && (
-                <span className="ml-3 text-gray-400">{profile.phoneNumber}</span>
+                <span className="text-gray-400">{profile.phoneNumber}</span>
               )}
               {profile.role && (
-                <Badge variant="outline" className="ml-3 text-xs capitalize border-gray-200 text-gray-500">
+                <Badge variant="outline" className="text-xs capitalize border-gray-200 text-gray-500">
                   {profile.role}
                 </Badge>
               )}
-            </p>
+            </div>
           )}
 
           {/* ── Linked Platform Accounts ─────────────────────────────── */}
@@ -433,15 +446,40 @@ export default function UserDetailPage() {
             </div>
           )}
         </div>
-        <Button
-          size="sm"
-          className="bg-blue hover:bg-darkBlue text-white gap-2 shrink-0"
-          onClick={() => setIsEditOpen(true)}
-          disabled={profileLoading}
-        >
-          <Pencil className="w-3.5 h-3.5" />
-          Edit Details
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Delete — hidden for admin accounts */}
+          {!profileLoading && profile.role?.toUpperCase() !== "ADMIN" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-red/30 text-red hover:bg-red/5 hover:border-red/50 gap-2"
+              onClick={() => setIsDeleteOpen(true)}
+              disabled={profileLoading}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Account
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-blue/30 text-blue hover:bg-blue/5 hover:border-blue/50 gap-2"
+            onClick={() => setIsCommunicateOpen(true)}
+            disabled={profileLoading}
+          >
+            <Mail className="w-3.5 h-3.5" />
+            Message User
+          </Button>
+          <Button
+            size="sm"
+            className="bg-blue hover:bg-darkBlue text-white gap-2"
+            onClick={() => setIsEditOpen(true)}
+            disabled={profileLoading}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit Details
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="investments" className="w-full">
@@ -1051,6 +1089,38 @@ export default function UserDetailPage() {
 
       </Tabs>
 
+      {/* ── Delete Account Modal ──────────────────────────────────────── */}
+      <ConfirmModal
+        open={isDeleteOpen}
+        onOpenChange={(v) => {
+          if (!v && !deleteMutation.isPending) setIsDeleteOpen(false);
+        }}
+        title="Delete user account"
+        message={
+          <span>
+            You are about to delete{" "}
+            <span className="font-semibold text-gray-900">
+              {profile.firstName && profile.lastName
+                ? `${profile.firstName} ${profile.lastName}`
+                : profile.email ?? `User #${userId}`}
+            </span>
+            .<br />
+            <span className="text-gray-500 text-sm">
+              If the account is inactive the deletion is{" "}
+              <span className="font-medium text-red">permanent</span>. If the
+              account has verified details or financial history it will be{" "}
+              <span className="font-medium text-amber-600">deactivated</span>{" "}
+              and records will be preserved for compliance.
+            </span>
+          </span>
+        }
+        confirmLabel="Yes, delete account"
+        cancelLabel="Cancel"
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
+        danger
+      />
+
       <ConfirmModal
         open={!!reopenTarget}
         onOpenChange={(v) => {
@@ -1094,7 +1164,7 @@ export default function UserDetailPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>First Name</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl><Input disabled {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1105,7 +1175,7 @@ export default function UserDetailPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Last Name</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl><Input disabled {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1117,7 +1187,7 @@ export default function UserDetailPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email</FormLabel>
-                    <FormControl><Input type="email" {...field} /></FormControl>
+                    <FormControl><Input type="email" disabled {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1128,7 +1198,7 @@ export default function UserDetailPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Phone Number</FormLabel>
-                    <FormControl><Input type="tel" placeholder="e.g. +2348012345678" {...field} /></FormControl>
+                    <FormControl><Input type="tel" placeholder="e.g. +2348012345678" disabled {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1139,7 +1209,11 @@ export default function UserDetailPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Role</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                      disabled={profile.role?.toUpperCase() !== "USER"}
+                    >
                       <FormControl>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                       </FormControl>
@@ -1150,6 +1224,11 @@ export default function UserDetailPage() {
                         <SelectItem value="partner">Partner</SelectItem>
                       </SelectContent>
                     </Select>
+                    {profile.role?.toUpperCase() !== "USER" && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Only regular users can be elevated. Elevated roles cannot be demoted or changed.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1157,7 +1236,7 @@ export default function UserDetailPage() {
               <Button
                 type="submit"
                 className="w-full bg-blue text-white"
-                disabled={updateMutation.isPending}
+                disabled={updateMutation.isPending || profile.role?.toUpperCase() !== "USER"}
               >
                 {updateMutation.isPending ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
@@ -1167,6 +1246,25 @@ export default function UserDetailPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* ── Communicate modal ──────────────────────────────────────────────── */}
+      <CommunicateModal
+        open={isCommunicateOpen}
+        onOpenChange={setIsCommunicateOpen}
+        defaultTarget="SPECIFIC_USERS"
+        preselectedUsers={
+          profile.email
+            ? [
+                {
+                  id: userId,
+                  email: profile.email,
+                  firstName: profile.firstName,
+                  lastName: profile.lastName,
+                },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }

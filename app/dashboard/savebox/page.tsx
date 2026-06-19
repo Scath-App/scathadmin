@@ -22,9 +22,10 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Edit, Trash2, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 const configSchema = z.object({
   type: z.string().min(1, "Required"),
@@ -36,6 +37,7 @@ const configSchema = z.object({
 
 export default function SaveboxConfigPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -94,9 +96,37 @@ export default function SaveboxConfigPage() {
   const columns: Column[] = [
     { key: "type", header: "Type", className: "font-medium text-sm" },
     { key: "duration", header: "Duration (months)", className: "font-mono text-sm" },
-    { key: "interestRate", header: "Interest Rate", render: (v) => `${v}%` },
-    { key: "upfrontRate", header: "Upfront Rate", render: (v) => `${v}%` },
-    { key: "spreadRate", header: "Spread Rate", render: (v) => `${v}%` },
+    { 
+      key: "interestRate", 
+      header: "Interest Rate", 
+      render: (v, row) => row.type?.toUpperCase() === 'FIXED' ? (
+        <span>{v}% <span className="text-gray-400 text-[11px] ml-1 font-normal">(Upfront)</span></span>
+      ) : (
+        v != null ? `${v}%` : <span className="text-gray-400 text-[11px] italic">Not Set</span>
+      ) 
+    },
+    { 
+      key: "upfrontRate", 
+      header: "Upfront Rate", 
+      render: (v, row) => {
+        const t = row.type?.toUpperCase();
+        if (t === 'FLEXIBLE' || t === 'EMERGENCY' || t === 'FIXED') {
+          return <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 text-gray-500 border border-gray-200">Not Applicable</span>;
+        }
+        return v != null ? `${v}%` : <span className="text-gray-400 text-[11px] italic">Not Set</span>;
+      }
+    },
+    { 
+      key: "spreadRate", 
+      header: "Spread Rate", 
+      render: (v, row) => {
+        const t = row.type?.toUpperCase();
+        if (t === 'FLEXIBLE' || t === 'EMERGENCY' || t === 'FIXED') {
+          return <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 text-gray-500 border border-gray-200">Not Applicable</span>;
+        }
+        return v != null ? `${v}%` : <span className="text-gray-400 text-[11px] italic">Not Set</span>;
+      }
+    },
     {
       key: "adminId",
       header: "Admin",
@@ -110,7 +140,6 @@ export default function SaveboxConfigPage() {
     {
       key: "id",
       header: "Actions",
-      headerClassName: "text-right",
       render: (id, row) => (
         <div className="flex items-center justify-end gap-1">
           <Button size="sm" variant="ghost" className="text-blue hover:bg-blue/5" onClick={() => openEdit(row)}>
@@ -151,21 +180,53 @@ export default function SaveboxConfigPage() {
               else createMutation.mutate(v);
             })} className="space-y-4 pt-1">
               <FormField control={form.control} name="type" render={({ field }) => (
-                <FormItem><FormLabel>Type</FormLabel><FormControl><Input placeholder="e.g. FLEXIBLE, FIXED" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select savebox type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="flexible">Flexible</SelectItem>
+                      <SelectItem value="emergency">Emergency</SelectItem>
+                      <SelectItem value="fixed">Fixed</SelectItem>
+                      <SelectItem value="portfolio">Portfolio</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
               )} />
               <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="duration" render={({ field }) => (
                   <FormItem><FormLabel>Duration (months)</FormLabel><FormControl><Input type="number" min={1} {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
-                <FormField control={form.control} name="interestRate" render={({ field }) => (
-                  <FormItem><FormLabel>Interest Rate (%)</FormLabel><FormControl><Input type="number" step="0.01" min={0} max={100} {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="upfrontRate" render={({ field }) => (
-                  <FormItem><FormLabel>Upfront Rate (%)</FormLabel><FormControl><Input type="number" step="0.01" min={0} max={100} {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="spreadRate" render={({ field }) => (
-                  <FormItem><FormLabel>Spread Rate (%)</FormLabel><FormControl><Input type="number" step="0.01" min={0} max={100} {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
+                <FormField control={form.control} name="interestRate" render={({ field }) => {
+                  const type = form.watch("type")?.toUpperCase();
+                  return (
+                    <FormItem>
+                      <FormLabel>{type === "FIXED" ? "Interest Rate (Upfront) (%)" : "Interest Rate (%)"}</FormLabel>
+                      <FormControl><Input type="number" step="0.01" min={0} max={100} {...field} /></FormControl>
+                      {type === "FIXED" && <p className="text-[11px] text-gray-500 mt-1">For Fixed plans, this interest is paid upfront.</p>}
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }} />
+                {(() => {
+                  const type = form.watch("type")?.toUpperCase();
+                  if (type === "FLEXIBLE" || type === "EMERGENCY" || type === "FIXED") return null;
+                  return (
+                    <>
+                      <FormField control={form.control} name="upfrontRate" render={({ field }) => (
+                        <FormItem><FormLabel>Upfront Rate (%)</FormLabel><FormControl><Input type="number" step="0.01" min={0} max={100} {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name="spreadRate" render={({ field }) => (
+                        <FormItem><FormLabel>Spread Rate (%)</FormLabel><FormControl><Input type="number" step="0.01" min={0} max={100} {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                    </>
+                  );
+                })()}
               </div>
               <Button type="submit" className="w-full bg-blue text-white" disabled={createMutation.isPending || updateMutation.isPending}>
                 {(createMutation.isPending || updateMutation.isPending) ? "Saving..." : editingConfig ? "Save Changes" : "Create Config"}

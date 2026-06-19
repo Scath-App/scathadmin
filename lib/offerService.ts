@@ -1,12 +1,13 @@
 import api from "./api";
 
-/** GET /admin/offers — correct admin endpoint */
-export const getOffers = async (page = 1, limit = 20) => {
+/** GET /admin/offers — 0-based pagination (page 0 = first page) */
+export const getOffers = async (page = 0, limit = 50) => {
   try {
     const response = await api.get("admin/offers", { params: { page, limit } });
     return response.data;
-  } catch (_e) {
-    return { data: [], meta: {} };
+  } catch (e: any) {
+    console.error("[getOffers]", e?.response?.data ?? e?.message);
+    return [];
   }
 };
 
@@ -44,5 +45,10 @@ export const submitOfferQuote = async (
   data: { amount: number; serviceDescription: string },
 ) => {
   const response = await api.post(`admin/offers/requests/${id}/quote`, data);
+  return response.data;
+};
+
+export const getQuotedOfferRequests = async () => {
+  const response = await api.get("admin/offers/requests/quoted");
   return response.data;
 };

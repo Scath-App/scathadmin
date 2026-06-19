@@ -240,7 +240,6 @@ export default function PayoutsPage() {
   const { data: pending, isLoading } = useQuery({
     queryKey: ["pendingPayouts"],
     queryFn: getPendingPayouts,
-    refetchInterval: 30000,
   });
 
   const pendingList: any[] = Array.isArray(pending) ? pending : [];
@@ -338,17 +337,17 @@ export default function PayoutsPage() {
       render: (v) => v ? format(new Date(v), "dd MMM yyyy, HH:mm") : "—",
     },
     {
-      key: "id",
+      key: "actions",
       header: "Actions",
       headerClassName: "text-right",
-      render: (id) => (
+      render: (_, row) => (
         <RoleGate roles={["ADMIN"]}>
           <div className="flex items-center justify-end gap-1.5">
             <Button
               size="sm"
               variant="ghost"
               className="text-greeny hover:bg-greeny/10 gap-1 text-xs"
-              onClick={() => setApprovingId(id)}
+              onClick={() => setApprovingId(row.id)}
             >
               <CheckCircle className="w-3.5 h-3.5" /> Approve
             </Button>
@@ -356,7 +355,7 @@ export default function PayoutsPage() {
               size="sm"
               variant="ghost"
               className="text-red hover:bg-red/10 gap-1 text-xs"
-              onClick={() => setRejectingId(id)}
+              onClick={() => setRejectingId(row.id)}
             >
               <XCircle className="w-3.5 h-3.5" /> Reject
             </Button>
@@ -372,9 +371,11 @@ export default function PayoutsPage() {
         title="Payouts"
         subtitle="Pending payout queue with maker-checker approval."
         actions={
-          <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={() => setIsCreateOpen(true)}>
-            <Plus className="w-4 h-4" /> Manual Payout
-          </Button>
+          <RoleGate roles={["ADMIN"]}>
+            <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={() => setIsCreateOpen(true)}>
+              <Plus className="w-4 h-4" /> Manual Payout
+            </Button>
+          </RoleGate>
         }
       />
 

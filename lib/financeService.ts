@@ -1,4 +1,7 @@
 import api from "./api";
+import axios from "axios";
+import { useAuthStore } from "@/hooks/useAuthStore";
+
 
 // ─── Local Accounts ────────────────────────────────────────────────────────────
 
@@ -10,6 +13,12 @@ export const getAccounts = async (params?: {
   isSubAccount?: boolean;
 }) => {
   const response = await api.get("admin/accounts", { params });
+  return response.data;
+};
+
+/** GET /admin/accounts/by-number-local/:accountNumber */
+export const getAccountByNumberLocal = async (accountNumber: string) => {
+  const response = await api.get(`admin/accounts/by-number-local/${accountNumber}`);
   return response.data;
 };
 
@@ -168,3 +177,26 @@ export const getAccountDashboard = async (page = 0, limit = 10) => {
 // updateFeeMarkup (PUT /admin/fees/:id/markup) is intentionally removed.
 // Use updateFee (PATCH /admin/fees/:id) instead.
 // syncSafeHavenAccounts (GET safehaven) is replaced by getSafeHavenAccounts.
+
+// ─── Health Checks ───────────────────────────────────────────────────────────
+
+export const getApiHealth = async () => {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_ENDPOINT || "https://api-scath-0zj3.onrender.com/api/v1/";
+  const rootUrl = baseUrl.replace(/\/api\/v1\/?$/, "");
+  const response = await axios.get(`${rootUrl}/health`);
+  return response.data;
+};
+
+export const getSafeHavenStatusDirect = async () => {
+  const token = useAuthStore.getState().accessToken;
+  if (!token) throw new Error("No access token available");
+  
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_ENDPOINT || "https://api-scath-0zj3.onrender.com/api/v1/";
+  const response = await axios.get(`${baseUrl}admin/accounts/safehaven/status`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.data;
+};
+

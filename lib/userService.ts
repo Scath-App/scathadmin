@@ -46,7 +46,7 @@ export const updateUser = async (
 
 export const updateUserRole = async (
   userId: number,
-  data: { role: "admin" | "partner" },
+  data: { role: "admin" | "partner" | "staff" },
 ) => {
   const response = await api.patch(`admin/users/${userId}/role`, data);
   return response.data;
@@ -176,3 +176,34 @@ export const reactivateUser = async (userId: number) => {
   const response = await api.post(`admin/users/${userId}/reactivate`);
   return response.data;
 };
+
+/** DELETE /admin/users/:userId — hard or soft delete determined by backend */
+export const deleteUser = async (
+  userId: number,
+): Promise<{ message: string; deletionType: "hard" | "soft" }> => {
+  const response = await api.delete(`admin/users/${userId}`);
+  return response.data;
+};
+
+/** DELETE /admin/users/bulk — mass delete user accounts in the background */
+export const bulkDeleteUsers = async (userIds: number[]) => {
+  const response = await api.delete(`admin/users/bulk`, {
+    data: { userIds },
+  });
+  return response.data;
+};
+
+export interface CommunicatePayload {
+  target: "ALL_USERS" | "SPECIFIC_USERS";
+  userIds?: number[];
+  channel: "EMAIL" | "PUSH" | "BOTH";
+  subject: string;
+  message: string;
+}
+
+/** POST /admin/users/communicate — send individual or bulk email/push notifications */
+export const communicateUsers = async (data: CommunicatePayload) => {
+  const response = await api.post("admin/users/communicate", data);
+  return response.data;
+};
+
