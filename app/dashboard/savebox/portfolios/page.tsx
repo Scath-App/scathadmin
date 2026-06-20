@@ -46,14 +46,23 @@ export default function PortfoliosPage() {
   });
 
   const portfolios: any[] = Array.isArray(portfoliosRaw) ? portfoliosRaw : portfoliosRaw?.data ?? [];
-  const strategyList: any[] = Array.isArray(strategies) ? strategies : strategies?.data ?? [];
+  const strategyList: any[] = Array.isArray(strategies) ? strategies : (strategies as any)?.strategies ?? [];
 
   const form = useForm({
     defaultValues: { name: "", strategy: "", isActive: true },
   });
   const selectedStrategy = form.watch("strategy");
-  const strategySchema = strategyList.find((s: any) => s.name === selectedStrategy || s.id === selectedStrategy);
-  const selectionRuleFields: any[] = strategySchema?.selectionRuleFields ?? [];
+  const strategySchema = strategyList.find((s: any) => s.value === selectedStrategy);
+  const allSelectionRuleFields = (strategies as any)?.selectionRuleFields ?? {};
+  const fieldsToShow = [
+    ...(strategySchema?.requiredFields ?? []),
+    ...(strategySchema?.optionalFields ?? []),
+  ].filter((f: string) => f !== "strategy");
+
+  const selectionRuleFields = fieldsToShow.map((key: string) => ({
+    key,
+    ...(allSelectionRuleFields?.[key] ?? {}),
+  })).filter((field: any) => field.type);
 
   const createMutation = useMutation({
     mutationFn: (data: object) => createPortfolio(data),
@@ -108,7 +117,15 @@ export default function PortfoliosPage() {
 
   const columns: Column[] = [
     { key: "name", header: "Name", className: "font-medium text-sm" },
-    { key: "strategy", header: "Strategy", className: "text-sm text-gray-500" },
+    {
+      key: "strategy",
+      header: "Strategy",
+      className: "text-sm text-gray-500",
+      render: (v) => {
+        const found = strategyList.find((s: any) => s.value === v);
+        return found ? found.label : v;
+      },
+    },
     {
       key: "selectionRules",
       header: "Selection Rules",
@@ -177,11 +194,18 @@ export default function PortfoliosPage() {
               <FormField control={form.control} name="strategy" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Strategy</FormLabel>
-                  <Select onValueChange={(v) => { field.onChange(v); setDynamicValues({}); }} value={field.value}>
+                  <Select
+                    onValueChange={(v) => {
+                      field.onChange(v);
+                      const schema = strategyList.find((s: any) => s.value === v);
+                      setDynamicValues(schema?.defaults ?? {});
+                    }}
+                    value={field.value}
+                  >
                     <FormControl><SelectTrigger><SelectValue placeholder="Select strategy..." /></SelectTrigger></FormControl>
                     <SelectContent>
                       {strategyList.map((s: any) => (
-                        <SelectItem key={s.id ?? s.name} value={s.name ?? s.id}>{s.name}</SelectItem>
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -203,16 +227,23 @@ export default function PortfoliosPage() {
                         >
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {(ruleField.options ?? []).map((opt: string) => (
-                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                            ))}
+                            {(ruleField.options ?? []).map((opt: any) => {
+                              const val = typeof opt === "object" ? opt.value : opt;
+                              const label = typeof opt === "object" ? opt.label : opt;
+                              return (
+                                <SelectItem key={val} value={val}>{label}</SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       ) : (
                         <Input
                           type={ruleField.type === "number" ? "number" : "text"}
                           value={String(dynamicValues[ruleField.key] ?? "")}
-                          onChange={(e) => setDynamicValues((prev) => ({ ...prev, [ruleField.key]: e.target.value }))}
+                          onChange={(e) => {
+                            const val = ruleField.type === "number" ? Number(e.target.value) : e.target.value;
+                            setDynamicValues((prev) => ({ ...prev, [ruleField.key]: val }));
+                          }}
                         />
                       )}
                     </div>
