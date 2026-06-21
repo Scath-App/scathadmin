@@ -202,7 +202,7 @@ export default function UsersPage() {
     }
     // 2. Status Filter
     if (statusFilter !== "ALL") {
-      const isFullyActive = !!u.kycStatus || !!u.hasAccount;
+      const isFullyActive = !!u.hasAccount;
       const isIncomplete =
         !u.isVerified && !u.isPhoneVerified && !u.kycStatus && !u.hasAccount;
       const isPending = !isFullyActive && !isIncomplete;
@@ -407,7 +407,7 @@ export default function UsersPage() {
       key: "status",
       header: "Status",
       render: (_, row) => {
-        const isFullyActive = !!row.kycStatus || !!row.hasAccount;
+        const isFullyActive = !!row.hasAccount;
         const isIncomplete =
           !row.isVerified &&
           !row.isPhoneVerified &&
