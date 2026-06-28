@@ -451,19 +451,7 @@ export default function UsersPage() {
     {
       key: "status",
       header: "Status",
-      render: (_, row) => {
-        const status = row.status?.toLowerCase();
-        if (status === "active") {
-          return <StatusBadge status="active" label="Fully Active" />;
-        }
-        if (status === "incomplete") {
-          return <StatusBadge status="inactive" label="Incomplete" />;
-        }
-        if (status === "suspended") {
-          return <StatusBadge status="suspended" label="Suspended" />;
-        }
-        return <StatusBadge status="pending" label="Pending Setup" />;
-      },
+      render: (v) => <StatusBadge status={v} />,
     },
     {
       key: "createdAt",
