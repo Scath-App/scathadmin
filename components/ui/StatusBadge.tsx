@@ -15,6 +15,8 @@ const STATUS_STYLES: Record<string, string> = {
   suspended:        "bg-red/10 text-red border-red/30",
   deleted:          "bg-red/10 text-red border-red/30",
   DELETED:          "bg-red/10 text-red border-red/30",
+  incomplete:       "bg-gray-100 text-gray-500 border-gray-200",
+  INCOMPLETE:       "bg-gray-100 text-gray-500 border-gray-200",
 
   // Uppercase equivalents
   ACTIVE:           "bg-greeny/10 text-greeny border-greeny/30",

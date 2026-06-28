@@ -10,6 +10,8 @@ import {
   reactivateUser,
   deleteUser,
   bulkDeleteUsers,
+  suspendUser,
+  unsuspendUser,
 } from "@/lib/userService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -56,6 +58,8 @@ import {
   Trash2,
   Mail,
   Megaphone,
+  Ban,
+  ShieldCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -73,6 +77,7 @@ type AdminUser = {
   hasAccount?: boolean;
   phoneNumber?: string;
   deletedAt?: string;
+  status?: string;
 };
 
 // ─── Schema ────────────────────────────────────────────────────────────────────
@@ -147,7 +152,7 @@ function DeletedUserSkeleton() {
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { isAdmin } = useRole();
+  const { isAdmin, isStaff } = useRole();
 
   // ── Active users state
   const [page, setPage] = useState(0);
@@ -155,6 +160,16 @@ export default function UsersPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [conflictError, setConflictError] = useState("");
+
+  // ── Suspend / Unsuspend user state
+  const [suspendTarget, setSuspendTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+  const [unsuspendTarget, setUnsuspendTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   // ── Delete user state
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -183,8 +198,22 @@ export default function UsersPage() {
 
   // ── Active users query
   const { data, isLoading } = useQuery({
-    queryKey: ["users", page],
-    queryFn: () => getUsers(page, LIMIT),
+    queryKey: ["users", page, statusFilter],
+    queryFn: () =>
+      getUsers(
+        page,
+        LIMIT,
+        undefined,
+        statusFilter === "ALL"
+          ? undefined
+          : statusFilter === "ACTIVE"
+          ? "active"
+          : statusFilter === "PENDING"
+          ? "pending"
+          : statusFilter === "INACTIVE"
+          ? "incomplete"
+          : "suspended"
+      ),
   });
 
   const users = (data?.data ??
@@ -192,7 +221,7 @@ export default function UsersPage() {
   const meta = data?.meta ?? {};
 
   const filtered = users.filter((u: AdminUser) => {
-    // 1. Text Search
+    // Text Search
     if (search) {
       const matchSearch =
         u.email?.toLowerCase().includes(search.toLowerCase()) ||
@@ -200,18 +229,34 @@ export default function UsersPage() {
         u.lastName?.toLowerCase().includes(search.toLowerCase());
       if (!matchSearch) return false;
     }
-    // 2. Status Filter
-    if (statusFilter !== "ALL") {
-      const isFullyActive = !!u.hasAccount;
-      const isIncomplete =
-        !u.isVerified && !u.isPhoneVerified && !u.kycStatus && !u.hasAccount;
-      const isPending = !isFullyActive && !isIncomplete;
-
-      if (statusFilter === "ACTIVE" && !isFullyActive) return false;
-      if (statusFilter === "INACTIVE" && !isIncomplete) return false;
-      if (statusFilter === "PENDING" && !isPending) return false;
-    }
     return true;
+  });
+
+  // ── Suspend mutation
+  const suspendMutation = useMutation({
+    mutationFn: ({ userId, reason }: { userId: number; reason?: string }) =>
+      suspendUser(userId, reason),
+    onSuccess: () => {
+      setSuspendTarget(null);
+      toast.success("User account has been suspended.");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.response?.data?.message ?? "Failed to suspend user.");
+    },
+  });
+
+  // ── Unsuspend mutation
+  const unsuspendMutation = useMutation({
+    mutationFn: (userId: number) => unsuspendUser(userId),
+    onSuccess: () => {
+      setUnsuspendTarget(null);
+      toast.success("User account has been unsuspended.");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.response?.data?.message ?? "Failed to unsuspend user.");
+    },
   });
 
   // ── Deleted users query
@@ -407,18 +452,15 @@ export default function UsersPage() {
       key: "status",
       header: "Status",
       render: (_, row) => {
-        const isFullyActive = !!row.hasAccount;
-        const isIncomplete =
-          !row.isVerified &&
-          !row.isPhoneVerified &&
-          !row.kycStatus &&
-          !row.hasAccount;
-
-        if (isFullyActive) {
+        const status = row.status?.toLowerCase();
+        if (status === "active") {
           return <StatusBadge status="active" label="Fully Active" />;
         }
-        if (isIncomplete) {
+        if (status === "incomplete") {
           return <StatusBadge status="inactive" label="Incomplete" />;
+        }
+        if (status === "suspended") {
+          return <StatusBadge status="suspended" label="Suspended" />;
         }
         return <StatusBadge status="pending" label="Pending Setup" />;
       },
@@ -432,38 +474,81 @@ export default function UsersPage() {
       key: "id",
       header: "Actions",
       headerClassName: "text-right",
-      render: (id, row) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-blue hover:bg-blue/10 gap-1"
-            onClick={() => router.push(`/dashboard/users/${id}`)}
-          >
-            <Eye className="w-4 h-4" /> View
-          </Button>
-          {/* Admins cannot delete other admins — hide the button for safety */}
-          {row.role?.toUpperCase() !== "ADMIN" && isAdmin && (
+      render: (id, row) => {
+        const isStaffOrAdminRow = ["ADMIN", "STAFF"].includes(row.role?.toUpperCase() ?? "");
+        const isSuspended = row.status?.toLowerCase() === "suspended";
+        const canSuspend = (isAdmin || isStaff) && !isStaffOrAdminRow;
+
+        return (
+          <div className="flex items-center justify-end gap-1">
             <Button
               size="sm"
               variant="ghost"
-              className="text-red/70 hover:text-red hover:bg-red/8 gap-1"
-              onClick={() =>
-                setDeleteTarget({
-                  id,
-                  name:
-                    row.firstName && row.lastName
-                      ? `${row.firstName} ${row.lastName}`
-                      : (row.email ?? `User #${id}`),
-                  role: row.role,
-                })
-              }
+              className="text-blue hover:bg-blue/10 gap-1"
+              onClick={() => router.push(`/dashboard/users/${id}`)}
             >
-              <Trash2 className="w-4 h-4" />
+              <Eye className="w-4 h-4" /> View
             </Button>
-          )}
-        </div>
-      ),
+            {canSuspend && (
+              isSuspended ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-greeny hover:text-greeny hover:bg-greeny/10 gap-1"
+                  onClick={() =>
+                    setUnsuspendTarget({
+                      id,
+                      name:
+                        row.firstName && row.lastName
+                          ? `${row.firstName} ${row.lastName}`
+                          : (row.email ?? `User #${id}`),
+                    })
+                  }
+                >
+                  <ShieldCheck className="w-4 h-4" /> Unsuspend
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 gap-1"
+                  onClick={() =>
+                    setSuspendTarget({
+                      id,
+                      name:
+                        row.firstName && row.lastName
+                          ? `${row.firstName} ${row.lastName}`
+                          : (row.email ?? `User #${id}`),
+                    })
+                  }
+                >
+                  <Ban className="w-4 h-4" /> Suspend
+                </Button>
+              )
+            )}
+            {/* Admins cannot delete other admins or staff — hide the button for safety */}
+            {!isStaffOrAdminRow && isAdmin && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-red/70 hover:text-red hover:bg-red/8 gap-1"
+                onClick={() =>
+                  setDeleteTarget({
+                    id,
+                    name:
+                      row.firstName && row.lastName
+                        ? `${row.firstName} ${row.lastName}`
+                        : (row.email ?? `User #${id}`),
+                    role: row.role,
+                  })
+                }
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -540,6 +625,7 @@ export default function UsersPage() {
                 <SelectItem value="ACTIVE">Fully Active</SelectItem>
                 <SelectItem value="PENDING">Pending Setup</SelectItem>
                 <SelectItem value="INACTIVE">Incomplete / Abandoned</SelectItem>
+                <SelectItem value="SUSPENDED">Suspended</SelectItem>
               </SelectContent>
             </Select>
 
@@ -869,6 +955,63 @@ export default function UsersPage() {
         onConfirm={() => {
           if (reactivateTarget) reactivateMutation.mutate(reactivateTarget.id);
         }}
+      />
+
+      {/* ── Suspend confirmation modal ─────────────────────────────────────── */}
+      <ConfirmModal
+        open={!!suspendTarget}
+        onOpenChange={(v) => {
+          if (!v && !suspendMutation.isPending) setSuspendTarget(null);
+        }}
+        title="Suspend user account"
+        message={
+          <span>
+            Are you sure you want to suspend{" "}
+            <span className="font-semibold text-gray-900">
+              {suspendTarget?.name}
+            </span>
+            's account? They will be signed out immediately and blocked from logging in.
+          </span>
+        }
+        confirmLabel="Suspend account"
+        cancelLabel="Cancel"
+        reasonField={true}
+        reasonLabel="Reason for suspension"
+        reasonRequired={false}
+        loading={suspendMutation.isPending}
+        onConfirm={(reason) => {
+          if (suspendTarget) {
+            suspendMutation.mutate({ userId: suspendTarget.id, reason });
+          }
+        }}
+        danger={true}
+      />
+
+      {/* ── Unsuspend confirmation modal ───────────────────────────────────── */}
+      <ConfirmModal
+        open={!!unsuspendTarget}
+        onOpenChange={(v) => {
+          if (!v && !unsuspendMutation.isPending) setUnsuspendTarget(null);
+        }}
+        title="Unsuspend user account"
+        message={
+          <span>
+            Are you sure you want to unsuspend{" "}
+            <span className="font-semibold text-gray-900">
+              {unsuspendTarget?.name}
+            </span>
+            's account? This will restore their access to the platform.
+          </span>
+        }
+        confirmLabel="Restore access"
+        cancelLabel="Cancel"
+        loading={unsuspendMutation.isPending}
+        onConfirm={() => {
+          if (unsuspendTarget) {
+            unsuspendMutation.mutate(unsuspendTarget.id);
+          }
+        }}
+        danger={false}
       />
 
       {/* ── Create user modal ──────────────────────────────────────────────── */}

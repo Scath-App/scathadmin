@@ -1,9 +1,9 @@
 import api from "./api";
 
-/** GET /admin/users?page=N&limit=N  (0-based) */
-export const getUsers = async (page = 0, limit = 20, search?: string) => {
+/** GET /admin/users?page=N&limit=N&status=S  (0-based) */
+export const getUsers = async (page = 0, limit = 20, search?: string, status?: string) => {
   const response = await api.get("admin/users", {
-    params: { page, limit, ...(search ? { search } : {}) },
+    params: { page, limit, ...(search ? { search } : {}), ...(status ? { status } : {}) },
   });
   return response.data;
 };
@@ -204,6 +204,23 @@ export interface CommunicatePayload {
 /** POST /admin/users/communicate — send individual or bulk email/push notifications */
 export const communicateUsers = async (data: CommunicatePayload) => {
   const response = await api.post("admin/users/communicate", data);
+  return response.data;
+};
+
+/** PATCH /admin/users/:userId/status — suspend a user account */
+export const suspendUser = async (userId: number, reason?: string) => {
+  const response = await api.patch(`admin/users/${userId}/status`, {
+    action: "suspend",
+    reason,
+  });
+  return response.data;
+};
+
+/** PATCH /admin/users/:userId/status — unsuspend a user account */
+export const unsuspendUser = async (userId: number) => {
+  const response = await api.patch(`admin/users/${userId}/status`, {
+    action: "unsuspend",
+  });
   return response.data;
 };
 
