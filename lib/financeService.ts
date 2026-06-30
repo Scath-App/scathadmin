@@ -11,14 +11,16 @@ export const getAccounts = async (params?: {
   limit?: number;
   isMainAccount?: boolean;
   isSubAccount?: boolean;
+  driftStatus?: string;
+  hasDrift?: boolean;
 }) => {
   const response = await api.get("admin/accounts", { params });
   return response.data;
 };
 
-/** GET /admin/accounts/by-number-local/:accountNumber */
-export const getAccountByNumberLocal = async (accountNumber: string) => {
-  const response = await api.get(`admin/accounts/by-number-local/${accountNumber}`);
+/** GET /admin/accounts/search — Search by account number, email, or phone */
+export const searchAccounts = async (q: string) => {
+  const response = await api.get("admin/accounts/search", { params: { q } });
   return response.data;
 };
 
@@ -39,13 +41,19 @@ export const updateAccountPurpose = async (id: number | string, purpose: string)
   return response.data;
 };
 
-/** POST /admin/accounts/:accountId/sync */
+/** POST /admin/accounts/:accountId/sync — Active reconcile: overwrites local ledger */
 export const syncSingleAccount = async (accountId: number | string) => {
   const response = await api.post(`admin/accounts/${accountId}/sync`);
   return response.data;
 };
 
-/** POST /admin/accounts/sync */
+/** POST /admin/accounts/:accountId/refresh — Passive: updates SH snapshot + drift only */
+export const refreshSingleAccount = async (accountId: number | string) => {
+  const response = await api.post(`admin/accounts/${accountId}/refresh`);
+  return response.data;
+};
+
+/** POST /admin/accounts/sync — Bulk passive scan: refresh all SH balances + drift in background */
 export const syncAllAccounts = async () => {
   const response = await api.post("admin/accounts/sync");
   return response.data ?? {};
@@ -53,15 +61,12 @@ export const syncAllAccounts = async () => {
 
 // ─── SafeHaven Accounts ────────────────────────────────────────────────────────
 
-/** GET /admin/accounts/safehaven — 0-based pagination */
-export const getSafeHavenAccounts = async (params?: {
-  page?: number;
-  limit?: number;
-  isSubAccount?: boolean;
-}) => {
-  const response = await api.get("admin/accounts/safehaven", { params });
+/** GET /admin/accounts/sync/:jobId */
+export const getSyncJobStatus = async (jobId: number | string) => {
+  const response = await api.get(`admin/accounts/sync/${jobId}`);
   return response.data;
 };
+
 
 /** GET /admin/accounts/by-number-safehaven/:accountNumber */
 export const getAccountByNumberSafeHaven = async (

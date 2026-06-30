@@ -186,8 +186,7 @@ export const navSections: NavSection[] = [
         label: "Accounts",
         icon: Building2,
         children: [
-          { label: "Local Accounts", href: "/dashboard/accounts", icon: Landmark },
-          { label: "Safe Haven", href: "/dashboard/accounts/safehaven", icon: Building2 },
+          { label: "Account Reconciliation", href: "/dashboard/accounts", icon: Landmark },
         ],
         // Account endpoints are ADMIN-only
         roles: ["ADMIN"],
