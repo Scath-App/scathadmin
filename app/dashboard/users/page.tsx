@@ -12,6 +12,7 @@ import {
   bulkDeleteUsers,
   suspendUser,
   unsuspendUser,
+  searchUsers,
 } from "@/lib/userService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -60,6 +61,7 @@ import {
   Megaphone,
   Ban,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -160,6 +162,27 @@ export default function UsersPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [conflictError, setConflictError] = useState("");
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const handleSearch = async () => {
+    if (!search.trim()) return;
+    setSearchLoading(true);
+    try {
+      const results = await searchUsers(search.trim());
+      if (results && results.length > 0) {
+        setSearchResults(results);
+      } else {
+        toast.error("No users found.");
+        setSearchResults(null);
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message ?? "Search failed.");
+      setSearchResults(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   // ── Suspend / Unsuspend user state
   const [suspendTarget, setSuspendTarget] = useState<{
@@ -222,7 +245,7 @@ export default function UsersPage() {
 
   const filtered = users.filter((u: AdminUser) => {
     // Text Search
-    if (search) {
+    if (search && !searchResults) {
       const matchSearch =
         u.email?.toLowerCase().includes(search.toLowerCase()) ||
         u.firstName?.toLowerCase().includes(search.toLowerCase()) ||
@@ -594,14 +617,25 @@ export default function UsersPage() {
         {/* ── ACTIVE USERS TAB ──────────────────────────────────────────── */}
         <TabsContent value="active" className="mt-6 space-y-4">
           <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative w-full sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search by name or email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 bg-white border-gray-200"
-              />
+            <div className="flex items-center gap-2 flex-1 w-full sm:max-w-sm">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search by name, email or phone..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className="pl-9 bg-white border-gray-200"
+                />
+              </div>
+              <Button
+                size="sm"
+                className="bg-blue hover:bg-darkBlue text-white h-10 px-4 font-medium"
+                onClick={handleSearch}
+                disabled={searchLoading || !search.trim()}
+              >
+                {searchLoading ? "Searching..." : "Search"}
+              </Button>
             </div>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -654,21 +688,36 @@ export default function UsersPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            {searchResults && (
+              <div className="border-b border-gray-100 bg-blue/5 px-6 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-blue">Search Result</p>
+                  <p className="text-xs text-blue/70 font-medium">Showing {searchResults.length} match(es) for &quot;{search}&quot;</p>
+                </div>
+                <Button variant="ghost" size="sm" className="h-8 px-3 text-blue hover:bg-blue/10 font-medium" onClick={() => { setSearchResults(null); setSearch(""); }}>
+                  <X className="w-4 h-4 mr-1.5" /> Clear Search
+                </Button>
+              </div>
+            )}
             <DataTable
               columns={columns}
-              data={filtered}
-              loading={isLoading}
+              data={searchResults ? searchResults : filtered}
+              loading={searchLoading || (!searchResults && isLoading)}
               rowKey={(r) => r.id}
               emptyMessage={
-                search ? "No users match your search." : "No users found."
+                search && !searchResults ? "No users match your local search. Press 'Search' to check all pages." : "No users found."
               }
-              pagination={{
-                mode: "0-based",
-                page,
-                totalPages: meta.totalPages ?? 1,
-                total: meta.total,
-                onPageChange: setPage,
-              }}
+              pagination={
+                searchResults
+                  ? undefined
+                  : {
+                      mode: "0-based",
+                      page,
+                      totalPages: meta.totalPages ?? 1,
+                      total: meta.total,
+                      onPageChange: setPage,
+                    }
+              }
             />
           </div>
         </TabsContent>

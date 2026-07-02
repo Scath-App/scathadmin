@@ -5,6 +5,7 @@ export interface RewardHistoryUserSummary {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
+  totalReferred?: number | null;
 }
 
 export interface AdminRewardHistoryItem {
@@ -47,8 +48,13 @@ export interface SendRewardsResponse {
  * GET /api/v1/admin/rewards/history?limit=N&cursor=opaque
  */
 export const getAdminRewardsHistory = async (params?: {
+  page?: number;
   limit?: number;
   cursor?: string;
+  search?: string;
+  type?: "credit" | "debit";
+  sortBy?: "date" | "amount" | "referrals";
+  sortOrder?: "ASC" | "DESC";
 }): Promise<AdminRewardsHistoryResponse> => {
   const response = await api.get("admin/rewards/history", {
     params,

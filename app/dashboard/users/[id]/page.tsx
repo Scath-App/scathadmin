@@ -482,14 +482,14 @@ export default function UserDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="investments" className="w-full">
+      <Tabs defaultValue="transactions" className="w-full">
         <TabsList className="bg-gray-100 p-1 rounded-xl w-full max-w-4xl grid grid-cols-5 gap-1">
           {[
-            { value: "investments", label: "Investments" },
             { value: "transactions", label: "Transactions" },
-            { value: "invoices", label: "Invoices" },
+            { value: "investments", label: "Investments" },
             { value: "saveboxes", label: "Saveboxes" },
             { value: "equity", label: "Equity" },
+            { value: "invoices", label: "Invoices" },
           ].map((t) => (
             <TabsTrigger
               key={t.value}

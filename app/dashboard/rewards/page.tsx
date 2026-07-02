@@ -31,9 +31,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Gift, CheckCircle, Coins, ArrowDownLeft, ArrowUpRight, Search, User, X } from "lucide-react";
+import { Gift, CheckCircle, Coins, ArrowDownLeft, ArrowUpRight, Search, User, X, Filter } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 const LIMIT = 25;
 
@@ -105,11 +113,17 @@ function RewardsUserCell({ row }: { row: AdminRewardHistoryItem }) {
   }
 
   const name = [row.user.firstName, row.user.lastName].filter(Boolean).join(" ");
+  const totalReferred = row.user.totalReferred ?? 0;
 
   return (
     <div className="min-w-[220px]">
-      <p className="text-sm font-medium text-gray-800">
+      <p className="text-sm font-medium text-gray-800 flex items-center gap-2">
         {name || `User #${row.user.id}`}
+        {totalReferred > 0 && (
+          <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue/10 text-blue">
+            {totalReferred} referral{totalReferred !== 1 ? "s" : ""}
+          </span>
+        )}
       </p>
       <p className="text-xs text-gray-500 truncate">{row.user.email}</p>
     </div>
@@ -117,6 +131,19 @@ function RewardsUserCell({ row }: { row: AdminRewardHistoryItem }) {
 }
 
 function HistoryTab() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedType, setSelectedType] = useState<"all" | "credit" | "debit">("all");
+  const [sortBy, setSortBy] = useState<"date" | "amount" | "referrals">("date");
+  const [sortOrder, setSortOrder] = useState<"ASC" | "DESC">("DESC");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
   const {
     data,
     isLoading,
@@ -124,16 +151,23 @@ function HistoryTab() {
     hasNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: ["adminRewardsHistory", LIMIT],
-    initialPageParam: undefined as string | undefined,
+    queryKey: ["adminRewardsHistory", LIMIT, debouncedSearch, selectedType, sortBy, sortOrder],
+    initialPageParam: { cursor: undefined as string | undefined, page: 0 },
     queryFn: ({ pageParam }) =>
       getAdminRewardsHistory({
         limit: LIMIT,
-        ...(pageParam ? { cursor: pageParam } : {}),
+        search: debouncedSearch || undefined,
+        type: selectedType === "all" ? undefined : selectedType,
+        sortBy,
+        sortOrder,
+        ...(pageParam.cursor ? { cursor: pageParam.cursor } : { page: pageParam.page }),
       }),
     getNextPageParam: (lastPage) =>
-      lastPage.meta.hasMore && lastPage.meta.nextCursor
-        ? lastPage.meta.nextCursor
+      lastPage.meta.hasMore
+        ? {
+            cursor: lastPage.meta.nextCursor ?? undefined,
+            page: lastPage.meta.page + 1,
+          }
         : undefined,
   });
 
@@ -150,8 +184,64 @@ function HistoryTab() {
   ];
 
   return (
-    <div className="space-y-8">
-      <BalanceCard />
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <BalanceCard />
+
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Search users or ref..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 border-gray-200">
+                <Filter className="w-4 h-4 text-gray-500" />
+                Filters
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Transaction Type</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setSelectedType("all")} className="justify-between">
+                All {selectedType === "all" && <CheckCircle className="w-4 h-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedType("credit")} className="justify-between">
+                Credit {selectedType === "credit" && <CheckCircle className="w-4 h-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedType("debit")} className="justify-between">
+                Debit {selectedType === "debit" && <CheckCircle className="w-4 h-4" />}
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Sort By</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setSortBy("date")} className="justify-between">
+                Date {sortBy === "date" && <CheckCircle className="w-4 h-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy("amount")} className="justify-between">
+                Amount {sortBy === "amount" && <CheckCircle className="w-4 h-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy("referrals")} className="justify-between">
+                Followers {sortBy === "referrals" && <CheckCircle className="w-4 h-4" />}
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Order</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setSortOrder("DESC")} className="justify-between">
+                Descending {sortOrder === "DESC" && <CheckCircle className="w-4 h-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder("ASC")} className="justify-between">
+                Ascending {sortOrder === "ASC" && <CheckCircle className="w-4 h-4" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">

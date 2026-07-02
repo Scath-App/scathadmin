@@ -95,19 +95,8 @@ export default function TreasuryPage() {
   const totalPages = meta.totalPages ?? (Math.ceil((meta.total ?? accounts.length) / LIMIT) || 1);
 
   // Charts
-  const purposeData = accounts.reduce((acc: any[], acct: any) => {
-    const p = acct.purpose ?? "other";
-    const existing = acc.find((a) => a.name === p);
-    if (existing) existing.value += acct.balanceInNaira ?? 0;
-    else acc.push({ name: p, value: acct.balanceInNaira ?? 0 });
-    return acc;
-  }, []);
-
-  const barData = accounts.slice(0, 10).map((acct: any) => ({
-    name: (acct.accountName ?? acct.accountNumber ?? "").slice(0, 14),
-    balance: acct.balanceInNaira ?? 0,
-    book: acct.bookBalanceInNaira ?? 0,
-  }));
+  const purposeData = summary.purposeSummary ?? [];
+  const barData = summary.top10Accounts ?? [];
 
   const syncAllMutation = useMutation({
     mutationFn: syncAllAccounts,

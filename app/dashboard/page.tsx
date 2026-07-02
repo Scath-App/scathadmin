@@ -290,6 +290,10 @@ export default function DashboardPage() {
     ? `₦${Number(cards.settledRevenueInNaira).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`
     : "—";
 
+  const lifetimeRevenueBalance = cards?.lifetimeRevenueBalanceInNaira != null
+    ? `₦${Number(cards.lifetimeRevenueBalanceInNaira).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`
+    : "—";
+
   const accounts = charts?.treasuryByPurpose ?? [];
   const recentLogs: any[] = (logsResult.data?.data ?? []).map(enrichAuditLog);
 
@@ -386,19 +390,20 @@ export default function DashboardPage() {
           colorClass="text-red-500"
           iconBgClass="bg-red-50"
         />
+
         <StatCard
-          title="Treasury Balance"
-          value={analyticsResult.isLoading ? "..." : treasuryBalance}
-          icon={DollarSign}
-          colorClass="text-greeny"
-          iconBgClass="bg-greeny/10"
-        />
-        <StatCard
-          title="Revenue"
+          title="Revenue Generated (30d)"
           value={analyticsResult.isLoading ? "..." : settledRevenue}
           icon={TrendingUp}
           colorClass="text-purple"
           iconBgClass="bg-purple/10"
+        />
+        <StatCard
+          title="Revenue Bank Balance"
+          value={analyticsResult.isLoading ? "..." : lifetimeRevenueBalance}
+          icon={DollarSign}
+          colorClass="text-orange-600"
+          iconBgClass="bg-orange-100"
         />
         <StatCard
           title="Rewards Balance"
