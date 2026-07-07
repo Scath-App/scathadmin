@@ -138,7 +138,7 @@ export default function VolumeAnalyticsPage() {
                 <XAxis dataKey="bucket" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#9ca3af" }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={(val) => `₦${(val/100).toLocaleString(undefined, {notation: 'compact'})}`} />
                 <Tooltip
-                  formatter={(value: number) => formatNaira(value)}
+                  formatter={(value: any) => formatNaira(value)}
                   contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
                 />
                 <Area type="monotone" dataKey="inflow" stroke="#10b981" strokeWidth={2} fill="url(#inflowGrad)" name="Inflow" />

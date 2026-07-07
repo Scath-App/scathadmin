@@ -21,6 +21,7 @@ export type AdminAnalyticsOverviewResponse = {
     activeSaveboxCount?: number;
     totalInvestorsCount?: number;
     totalEquityCompaniesCount?: number;
+    lifetimeRevenueBalanceInNaira?: number;
   };
   charts: {
     treasuryByPurpose: Array<{

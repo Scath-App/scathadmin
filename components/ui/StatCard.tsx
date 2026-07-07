@@ -10,6 +10,7 @@ interface StatCardProps {
   trendUp?: boolean;
   colorClass?: string;
   iconBgClass?: string;
+  tooltip?: string;
 }
 
 export function StatCard({
@@ -20,9 +21,10 @@ export function StatCard({
   trendUp = true,
   colorClass = "text-blue",
   iconBgClass = "bg-faintSky",
+  tooltip,
 }: StatCardProps) {
   return (
-    <Card className="group overflow-hidden border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300">
+    <Card title={tooltip} className="group overflow-hidden border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300">
       <CardContent className="p-6 relative">
         {/* Subtle background glow effect */}
         <div className={cn("absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500", iconBgClass)} />

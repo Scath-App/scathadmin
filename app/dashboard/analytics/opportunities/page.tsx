@@ -100,7 +100,7 @@ export default function OpportunitiesAnalyticsPage() {
         />
         <StatCard
           title="Total Investors"
-          value={isLoading ? "..." : cards?.totalInvestors?.toLocaleString()}
+          value={isLoading ? "..." : (cards?.totalInvestors?.toLocaleString() ?? "—")}
           icon={Users}
           colorClass="text-blue-600"
           iconBgClass="bg-blue-50"

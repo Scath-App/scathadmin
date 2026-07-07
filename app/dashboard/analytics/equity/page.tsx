@@ -87,7 +87,7 @@ export default function EquityAnalyticsPage() {
         />
         <StatCard
           title="Total Shareholders"
-          value={isLoading ? "..." : cards?.totalShareholders?.toLocaleString()}
+          value={isLoading ? "..." : (cards?.totalShareholders?.toLocaleString() ?? "—")}
           icon={Users}
           colorClass="text-indigo-600"
           iconBgClass="bg-indigo-50"
@@ -101,7 +101,7 @@ export default function EquityAnalyticsPage() {
         />
         <StatCard
           title="Locked-In Users"
-          value={isLoading ? "..." : cards?.lockInComplianceCount?.toLocaleString()}
+          value={isLoading ? "..." : (cards?.lockInComplianceCount?.toLocaleString() ?? "—")}
           icon={Lock}
           colorClass="text-emerald-600"
           iconBgClass="bg-emerald-50"

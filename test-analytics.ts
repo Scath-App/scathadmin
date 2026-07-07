@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './src/app.module';
 import { AdminAnalyticsService } from './src/finance/service/admin-analytics.service';
