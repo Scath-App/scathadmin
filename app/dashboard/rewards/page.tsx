@@ -218,6 +218,7 @@ function HistoryTab() {
                 Debit {selectedType === "debit" && <CheckCircle className="w-4 h-4" />}
               </DropdownMenuItem>
               
+
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Sort By</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => setSortBy("date")} className="justify-between">
@@ -227,7 +228,7 @@ function HistoryTab() {
                 Amount {sortBy === "amount" && <CheckCircle className="w-4 h-4" />}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy("referrals")} className="justify-between">
-                Followers {sortBy === "referrals" && <CheckCircle className="w-4 h-4" />}
+                Referrals {sortBy === "referrals" && <CheckCircle className="w-4 h-4" />}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />

@@ -356,6 +356,97 @@ export default function DashboardPage() {
 
   return (
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-8 animate-in fade-in duration-500">
+      
+      {/* Platform Pulse Banner */}
+      <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl border-2 border-blue-500/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 sm:p-8 relative overflow-hidden">
+        {/* Subtle decorative background elements */}
+        <div className="absolute top-0 right-0 p-32 bg-blue-500/5 blur-3xl rounded-full pointer-events-none"></div>
+        
+        <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-white rounded-xl shadow-sm ring-1 ring-gray-100">
+              <BarChart3 className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-gray-900">Platform Pulse</h2>
+              <p className="text-sm font-medium text-gray-500">All Time Summary</p>
+            </div>
+          </div>
+          <Link href="/dashboard/analytics/volume" className="flex items-center gap-2 text-sm font-semibold text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 transition-colors px-4 py-2.5 rounded-lg ring-1 ring-blue-200/50 shadow-sm">
+            Detailed Reports <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+        
+        <div className="relative z-10 grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+          
+          {/* Total Inflow */}
+          <Link href="/dashboard/analytics/volume" className="flex flex-col justify-center p-4 rounded-xl bg-emerald-50/50 border border-emerald-100 hover:bg-emerald-50 transition-colors group">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <TrendingUp className="w-3.5 h-3.5" />
+              </div>
+              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Total Inflow</p>
+            </div>
+            <p className="text-2xl lg:text-3xl font-bold text-emerald-950 tracking-tight">
+              ₦{analyticsResult.isLoading ? "..." : ((cards?.lifetimeInflowInKobo || 0) / 100).toLocaleString("en-NG", { notation: "compact", maximumFractionDigits: 1 })}
+            </p>
+          </Link>
+
+          {/* Total Outflow */}
+          <Link href="/dashboard/analytics/volume" className="flex flex-col justify-center p-4 rounded-xl bg-rose-50/50 border border-rose-100 hover:bg-rose-50 transition-colors group">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-md bg-rose-100 flex items-center justify-center text-rose-600">
+                <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+              <p className="text-xs font-bold text-rose-700 uppercase tracking-wider">Total Outflow</p>
+            </div>
+            <p className="text-2xl lg:text-3xl font-bold text-rose-950 tracking-tight">
+              ₦{analyticsResult.isLoading ? "..." : ((cards?.lifetimeOutflowInKobo || 0) / 100).toLocaleString("en-NG", { notation: "compact", maximumFractionDigits: 1 })}
+            </p>
+          </Link>
+
+          {/* Savebox */}
+          <Link href="/dashboard/analytics/savebox" className="flex flex-col justify-center p-4 rounded-xl bg-indigo-50/50 border border-indigo-100 hover:bg-indigo-50 transition-colors group">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
+                <Briefcase className="w-3.5 h-3.5" />
+              </div>
+              <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Savebox Active</p>
+            </div>
+            <p className="text-2xl lg:text-3xl font-bold text-indigo-950 tracking-tight">
+              {analyticsResult.isLoading ? "..." : (cards?.activeSaveboxCount || 0).toLocaleString()}
+            </p>
+          </Link>
+
+          {/* Investments */}
+          <Link href="/dashboard/analytics/opportunities" className="flex flex-col justify-center p-4 rounded-xl bg-orange-50/50 border border-orange-100 hover:bg-orange-50 transition-colors group">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-md bg-orange-100 flex items-center justify-center text-orange-600">
+                <Users className="w-3.5 h-3.5" />
+              </div>
+              <p className="text-xs font-bold text-orange-700 uppercase tracking-wider">Investors</p>
+            </div>
+            <p className="text-2xl lg:text-3xl font-bold text-orange-950 tracking-tight">
+              {analyticsResult.isLoading ? "..." : (cards?.totalInvestorsCount || 0).toLocaleString()}
+            </p>
+          </Link>
+
+          {/* Equity */}
+          <Link href="/dashboard/analytics/equity" className="flex flex-col justify-center p-4 rounded-xl bg-cyan-50/50 border border-cyan-100 hover:bg-cyan-50 transition-colors group">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-md bg-cyan-100 flex items-center justify-center text-cyan-600">
+                <BarChart3 className="w-3.5 h-3.5" />
+              </div>
+              <p className="text-xs font-bold text-cyan-700 uppercase tracking-wider">Listed Equity</p>
+            </div>
+            <p className="text-2xl lg:text-3xl font-bold text-cyan-950 tracking-tight">
+              {analyticsResult.isLoading ? "..." : (cards?.totalEquityCompaniesCount || 0).toLocaleString()}
+            </p>
+          </Link>
+
+        </div>
+      </div>
+
       {!payoutsResult.isLoading && pendingCount > 0 && (
         <div className="relative group overflow-hidden bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200/60 shadow-[0_2px_10px_rgb(250,204,21,0.1)] rounded-2xl px-5 py-3.5 flex items-center gap-3 transition-all hover:shadow-[0_4px_20px_rgb(250,204,21,0.15)] hover:border-yellow-300/50">
           <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-transparent pointer-events-none" />

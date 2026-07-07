@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getAccounts, createMainAccount, updateAccountPurpose,
-  syncSingleAccount, syncAllAccounts, searchAccounts,
-  getSyncJobStatus, refreshSingleAccount
+  syncSingleAccount, searchAccounts,
+  refreshSingleAccount
 } from "@/lib/financeService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -59,7 +59,6 @@ export default function AccountsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingPurposeId, setEditingPurposeId] = useState<number | null>(null);
   const [newPurpose, setNewPurpose] = useState("");
-  const [syncJobId, setSyncJobId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<any>(null);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -77,23 +76,7 @@ export default function AccountsPage() {
     enabled: isAdmin,
   });
 
-  const { data: syncJobStatus } = useQuery({
-    queryKey: ["syncJob", syncJobId],
-    queryFn: () => getSyncJobStatus(syncJobId!),
-    enabled: !!syncJobId,
-    refetchInterval: (query: any) => {
-      const status = query.state?.data?.status || query.data?.status;
-      return (status === "pending" || status === "processing") ? 3000 : false;
-    },
-  });
 
-  useEffect(() => {
-    if (syncJobStatus?.status === "completed" || syncJobStatus?.status === "failed") {
-      setSyncJobId(null);
-      toast.success(`Sync finished: ${syncJobStatus.successfulAccounts} succeeded, ${syncJobStatus.failedAccounts} failed.`);
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-    }
-  }, [syncJobStatus, queryClient]);
 
   const accounts: any[] = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -168,18 +151,7 @@ export default function AccountsPage() {
     onError: (e: any) => toast.error(e.response?.data?.message ?? "Refresh failed."),
   });
 
-  const syncAllMutation = useMutation({
-    mutationFn: syncAllAccounts,
-    onSuccess: (res: any) => {
-      if (res?.jobId) {
-        setSyncJobId(res.jobId);
-        toast.success("Scanning all accounts for drift in background...");
-      } else {
-        toast.success("Refresh queued.");
-      }
-    },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? "Refresh all failed."),
-  });
+
 
   const columns: Column[] = [
     {
@@ -402,15 +374,6 @@ export default function AccountsPage() {
         subtitle="Platform accounts with purpose, balance, and sync status."
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              className="border-gray-200 gap-2"
-              disabled={syncAllMutation.isPending}
-              onClick={() => syncAllMutation.mutate()}
-            >
-              <RefreshCw className={`h-4 w-4 ${syncAllMutation.isPending ? "animate-spin" : ""}`} />
-              Refresh All
-            </Button>
             <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={() => setIsCreateOpen(true)}>
               <Plus className="h-4 w-4" /> Create Account
             </Button>
@@ -480,16 +443,7 @@ export default function AccountsPage() {
         </div>
       </div>
 
-      {syncJobId && syncJobStatus && syncJobStatus.status !== "completed" && syncJobStatus.status !== "failed" && (
-        <div className="bg-blue/5 border border-blue/20 rounded-xl p-4 flex items-center justify-between text-sm text-blue">
-          <div className="flex items-center gap-3">
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            <span className="font-medium">
-              Syncing accounts... {syncJobStatus.successfulAccounts + syncJobStatus.failedAccounts} / {syncJobStatus.totalAccounts ?? '?'} processed
-            </span>
-          </div>
-        </div>
-      )}
+
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {searchResult && (

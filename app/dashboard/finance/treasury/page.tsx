@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getAccountDashboard,
-  syncAllAccounts,
-  syncSingleAccount,
   poolTransfer,
 } from "@/lib/financeService";
 import { StatCard } from "@/components/ui/StatCard";
@@ -98,23 +96,9 @@ export default function TreasuryPage() {
   const purposeData = summary.purposeSummary ?? [];
   const barData = summary.top10Accounts ?? [];
 
-  const syncAllMutation = useMutation({
-    mutationFn: syncAllAccounts,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["treasury-dashboard"] });
-      toast.success("All accounts synced.");
-    },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? "Sync all failed."),
-  });
 
-  const syncOneMutation = useMutation({
-    mutationFn: (id: number) => syncSingleAccount(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["treasury-dashboard"] });
-      toast.success("Account synced.");
-    },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? "Sync failed."),
-  });
+
+
 
   const poolMutation = useMutation({
     mutationFn: () => {
@@ -193,29 +177,6 @@ export default function TreasuryPage() {
         </Badge>
       ),
     },
-    {
-      key: "id",
-      header: "",
-      headerClassName: "text-right",
-      render: (id) => (
-        <div className="flex justify-end">
-          {isAdmin ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-gray-400 hover:text-blue"
-              disabled={syncOneMutation.isPending}
-              onClick={() => syncOneMutation.mutate(id)}
-              title="Sync account"
-            >
-              <RefreshCcw className="w-3.5 h-3.5" />
-            </Button>
-          ) : (
-            <span className="text-xs text-gray-400">—</span>
-          )}
-        </div>
-      ),
-    },
   ];
 
   return (
@@ -227,15 +188,6 @@ export default function TreasuryPage() {
         actions={
           isAdmin && (
             <>
-              <Button
-                variant="outline"
-                className="gap-2 border-gray-200"
-                disabled={syncAllMutation.isPending}
-                onClick={() => syncAllMutation.mutate()}
-              >
-                <RefreshCw className={`h-4 w-4 ${syncAllMutation.isPending ? "animate-spin" : ""}`} />
-                Sync All
-              </Button>
               <Button
                 className="bg-blue hover:bg-darkBlue text-white gap-2"
                 onClick={() => setIsPoolOpen(true)}
