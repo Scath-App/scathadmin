@@ -1,6 +1,6 @@
 import api from "./api";
 
-export type AdminAnalyticsWindow = "7d" | "30d" | "90d";
+export type AdminAnalyticsWindow = "1d" | "7d" | "30d" | "90d";
 
 export type AdminAnalyticsOverviewResponse = {
   window: AdminAnalyticsWindow;

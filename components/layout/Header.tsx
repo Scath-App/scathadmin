@@ -4,6 +4,7 @@ import { useAuthStore } from "@/hooks/useAuthStore";
 import { useRole } from "@/hooks/useRole";
 import { useQuery } from "@tanstack/react-query";
 import { getAccountDashboard } from "@/lib/financeService";
+import { getAdminAnalyticsOverview } from "@/lib/analyticsService";
 import { Button } from "@/components/ui/button";
 import { SystemStatus } from "./SystemStatus";
 
@@ -52,25 +53,17 @@ export function Header() {
 
   const isDashboardHome = pathname === "/dashboard" || pathname === "/dashboard/";
 
-  const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
-    queryKey: ["accountDashboard-header"],
-    queryFn: () => getAccountDashboard(0, 50),
+  const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
+    queryKey: ["analytics-overview", "30d"],
+    queryFn: () => getAdminAnalyticsOverview("30d"),
     enabled: isDashboardHome && isAdminOrStaff,
   });
 
-  const accounts = dashboardData?.data ?? [];
-  const parentAccount = dashboardData?.summary?.parentAccount;
-  const adminAccount = parentAccount ?? accounts.find(
-    (a: any) => a.accountName?.toUpperCase().includes("THESCATHCOMPANIES")
-  );
-
-  const mainBalanceValue =
-    parentAccount?.balanceInNaira ??
-    (parentAccount?.balanceInKobo != null ? Number(parentAccount.balanceInKobo) / 100 : undefined) ??
-    adminAccount?.balanceInNaira ??
-    (adminAccount?.accountBalanceInKobo != null ? Number(adminAccount.accountBalanceInKobo) / 100 : undefined) ??
-    0;
-  const mainBalance = mainBalanceValue.toLocaleString("en-NG", {
+  const lifetimeGtvValue = analyticsData?.cards?.lifetimeGtvInKobo != null 
+    ? Number(analyticsData.cards.lifetimeGtvInKobo) / 100 
+    : 0;
+    
+  const mainBalance = lifetimeGtvValue.toLocaleString("en-NG", {
     minimumFractionDigits: 2,
   });
 
@@ -137,7 +130,7 @@ export function Header() {
         {/* Balance display */}
         <div>
           <p className="text-xs font-medium text-white/70 uppercase tracking-wider mb-2">
-            Parent Account Balance
+            Gross Total Volume
           </p>
           <div className="flex items-center gap-3">
             <button 
@@ -152,7 +145,7 @@ export function Header() {
               )}
             </button>
             <span className="text-4xl font-bold tracking-tight">
-              {dashboardLoading ? (
+              {analyticsLoading ? (
                 <span className="opacity-50">₦ ...,...,...</span>
               ) : isBalanceHidden ? (
                 <span className="opacity-80">₦ ****</span>
