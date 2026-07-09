@@ -688,7 +688,7 @@ export default function UserDetailPage() {
                 ) : (
                   transactions.map((tx: AnyRecord) => (
                     <TableRow
-                      key={tx.reference as string | number}
+                      key={tx.id as string | number}
                       className="hover:bg-gray-50/50"
                     >
                       <TableCell className="font-mono text-xs text-gray-500 max-w-40 truncate">
