@@ -157,14 +157,14 @@ export default function EquityListingsPage() {
   // ─── Handlers ────────────────────────────────────────────────────────────────
   const openEdit = (eq: any) => {
     setEditingEquity(eq);
-    // Pre-fill money fields as naira (backend stores raw base currency)
+    // Pre-fill money fields as naira (backend returns raw Kobo)
     editForm.reset({
       companyName: eq.companyName ?? eq.company ?? "",
       description: eq.description ?? "",
-      sharePrice: eq.sharePrice ?? 0,
-      valuation: eq.valuation ?? 0,
-      mrr: eq.mrr ?? 0,
-      arr: eq.arr ?? 0,
+      sharePrice: eq.sharePrice ? eq.sharePrice / 100 : 0,
+      valuation: eq.valuation ? eq.valuation / 100 : 0,
+      mrr: eq.mrr ? eq.mrr / 100 : 0,
+      arr: eq.arr ? eq.arr / 100 : 0,
       totalShares: eq.totalShares ?? 0,
       availableShares: eq.availableShares ?? 0,
       lockInPeriod: eq.lockInPeriod ?? eq.lockInPeriodDays ?? 0,
@@ -186,9 +186,9 @@ export default function EquityListingsPage() {
     setMetricsEquity(eq);
     // Pre-fill as naira
     metricsForm.reset({
-      valuation: eq.valuation ?? 0,
-      mrr: eq.mrr ?? 0,
-      arr: eq.arr ?? 0,
+      valuation: eq.valuation ? eq.valuation / 100 : 0,
+      mrr: eq.mrr ? eq.mrr / 100 : 0,
+      arr: eq.arr ? eq.arr / 100 : 0,
     });
   };
 
@@ -200,19 +200,19 @@ export default function EquityListingsPage() {
       key: "sharePrice",
       header: "Share Price",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell naira={v} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell kobo={v} /></div>,
     },
     {
       key: "valuation",
       header: "Valuation",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right">{v ? <MoneyCell naira={v} /> : "—"}</div>,
+      render: (v) => <div className="text-right">{v ? <MoneyCell kobo={v} /> : "—"}</div>,
     },
     {
       key: "mrr",
       header: "MRR",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right">{v ? <MoneyCell naira={v} /> : "—"}</div>,
+      render: (v) => <div className="text-right">{v ? <MoneyCell kobo={v} /> : "—"}</div>,
     },
     {
       key: "totalShares",
@@ -317,7 +317,13 @@ export default function EquityListingsPage() {
           {!editingEquity && (
             <Form {...createForm}>
               <form
-                onSubmit={createForm.handleSubmit((v) => createMutation.mutate(v))}
+                onSubmit={createForm.handleSubmit((v) => createMutation.mutate({
+                  ...v,
+                  sharePrice: Math.round(v.sharePrice * 100),
+                  valuation: Math.round(v.valuation * 100),
+                  mrr: v.mrr ? Math.round(v.mrr * 100) : 0,
+                  arr: v.arr ? Math.round(v.arr * 100) : 0,
+                }))}
                 className="space-y-4 pt-1"
               >
                 <FormField control={createForm.control} name="companyName" render={({ field }) => (
@@ -370,7 +376,16 @@ export default function EquityListingsPage() {
           {editingEquity && (
             <Form {...editForm}>
               <form
-                onSubmit={editForm.handleSubmit((v) => updateMutation.mutate({ id: editingEquity.id, data: v }))}
+                onSubmit={editForm.handleSubmit((v) => updateMutation.mutate({
+                  id: editingEquity.id,
+                  data: {
+                    ...v,
+                    sharePrice: Math.round(v.sharePrice * 100),
+                    valuation: Math.round(v.valuation * 100),
+                    mrr: v.mrr ? Math.round(v.mrr * 100) : 0,
+                    arr: v.arr ? Math.round(v.arr * 100) : 0,
+                  }
+                }))}
                 className="space-y-4 pt-1"
               >
                 <FormField control={editForm.control} name="companyName" render={({ field }) => (
@@ -446,7 +461,15 @@ export default function EquityListingsPage() {
           <Form {...metricsForm}>
             <form
               onSubmit={metricsForm.handleSubmit((v) =>
-                metricsMutation.mutate({ id: metricsEquity.id, data: v })
+                metricsMutation.mutate({
+                  id: metricsEquity.id,
+                  data: {
+                    ...v,
+                    valuation: Math.round(v.valuation * 100),
+                    mrr: v.mrr ? Math.round(v.mrr * 100) : 0,
+                    arr: v.arr ? Math.round(v.arr * 100) : 0,
+                  }
+                })
               )}
               className="space-y-4"
             >
