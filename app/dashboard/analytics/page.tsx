@@ -6,6 +6,8 @@ import {
   getAdminAnalyticsOverview,
   AdminAnalyticsWindow,
 } from "@/lib/analyticsService";
+import { AnalyticsDateFilter } from "@/components/analytics/AnalyticsDateFilter";
+import { subDays } from "date-fns";
 import {
   AreaChart,
   Area,
@@ -34,12 +36,6 @@ import {
 import { format, parseISO } from "date-fns";
 
 const CHART_COLORS = ["#074D97", "#53A753", "#FFC52F", "#5727F5", "#EA4335", "#0980FF"];
-
-const WINDOW_OPTIONS: { label: string; value: AdminAnalyticsWindow }[] = [
-  { label: "7 days", value: "7d" },
-  { label: "30 days", value: "30d" },
-  { label: "90 days", value: "90d" },
-];
 
 function formatBucket(bucket: string) {
   try {
@@ -73,12 +69,35 @@ const TooltipStyle = {
 };
 
 export default function AnalyticsPage() {
+  const today = new Date();
   const [window, setWindow] = useState<AdminAnalyticsWindow>("30d");
+  const [startDate, setStartDate] = useState(format(subDays(today, 30), "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(format(today, "yyyy-MM-dd"));
+  const [activeRange, setActiveRange] = useState<number | null>(30);
+
+  const queryParam = activeRange !== null ? { window } : { startDate, endDate };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["analytics-overview", window],
-    queryFn: () => getAdminAnalyticsOverview(window),
+    queryKey: ["analytics-overview", activeRange !== null ? window : `${startDate}_${endDate}`],
+    queryFn: () => getAdminAnalyticsOverview(queryParam),
   });
+
+  const handleWindowChange = (w: AdminAnalyticsWindow, days: number) => {
+    setWindow(w);
+    setActiveRange(days);
+    setStartDate(format(subDays(today, days), "yyyy-MM-dd"));
+    setEndDate(format(today, "yyyy-MM-dd"));
+  };
+
+  const handleStartDateChange = (date: string) => {
+    setStartDate(date);
+    setActiveRange(null);
+  };
+
+  const handleEndDateChange = (date: string) => {
+    setEndDate(date);
+    setActiveRange(null);
+  };
 
   const charts = data?.charts;
   const cards = data?.cards;
@@ -173,22 +192,16 @@ export default function AnalyticsPage() {
           </p>
         </div>
 
-        {/* Window selector */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
-          {WINDOW_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setWindow(opt.value)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                window === opt.value
-                  ? "bg-white shadow-sm text-gray-900"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        {/* Analytics Date Filter Component */}
+        <AnalyticsDateFilter
+          window={window}
+          startDate={startDate}
+          endDate={endDate}
+          activeRange={activeRange}
+          onWindowChange={handleWindowChange}
+          onStartDateChange={handleStartDateChange}
+          onEndDateChange={handleEndDateChange}
+        />
       </div>
 
       {/* ── KPI cards ─────────────────────────────────────────────── */}

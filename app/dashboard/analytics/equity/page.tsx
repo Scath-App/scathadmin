@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getEquityAnalytics, AdminAnalyticsWindow } from "@/lib/analyticsService";
+import { getEquityAnalytics, downloadEquityReportPdf, AdminAnalyticsWindow } from "@/lib/analyticsService";
+import { AnalyticsDateFilter } from "@/components/analytics/AnalyticsDateFilter";
+import { format, subDays } from "date-fns";
 import { StatCard } from "@/components/ui/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -12,20 +14,50 @@ import {
 import {
   Download, Calendar, ChevronLeft, TrendingUp, Users, ArrowDownToLine, CheckCircle2, Lock, ArrowRightLeft, Building
 } from "lucide-react";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 
 export default function EquityAnalyticsPage() {
+  const today = new Date();
   const [window, setWindow] = useState<AdminAnalyticsWindow>("30d");
+  const [startDate, setStartDate] = useState(format(subDays(today, 30), "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(format(today, "yyyy-MM-dd"));
+  const [activeRange, setActiveRange] = useState<number | null>(30);
+  const [isExporting, setIsExporting] = useState(false);
   
+  const queryParam = activeRange !== null ? { window } : { startDate, endDate };
+
   const { data, isLoading } = useQuery({
-    queryKey: ["analytics-equity", window],
-    queryFn: () => getEquityAnalytics(window),
+    queryKey: ["analytics-equity", activeRange !== null ? window : `${startDate}_${endDate}`],
+    queryFn: () => getEquityAnalytics(queryParam),
   });
+
+  const handleWindowChange = (w: AdminAnalyticsWindow, days: number) => {
+    setWindow(w);
+    setActiveRange(days);
+    setStartDate(format(subDays(today, days), "yyyy-MM-dd"));
+    setEndDate(format(today, "yyyy-MM-dd"));
+  };
+
+  const handleStartDateChange = (date: string) => {
+    setStartDate(date);
+    setActiveRange(null);
+  };
+
+  const handleEndDateChange = (date: string) => {
+    setEndDate(date);
+    setActiveRange(null);
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await downloadEquityReportPdf(queryParam);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const cards = data?.cards;
   const charts = data?.charts;
@@ -44,7 +76,7 @@ export default function EquityAnalyticsPage() {
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-8 animate-in fade-in duration-500">
       
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <Link href="/dashboard" className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors mb-2">
             <ChevronLeft className="w-4 h-4 mr-1" /> Back to Dashboard
@@ -57,21 +89,24 @@ export default function EquityAnalyticsPage() {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <Select value={window} onValueChange={(val) => setWindow(val as AdminAnalyticsWindow)}>
-            <SelectTrigger className="w-[140px] bg-white">
-              <Calendar className="w-4 h-4 mr-2 text-gray-500" />
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1d">Last 24 Hours</SelectItem>
-              <SelectItem value="7d">Last 7 Days</SelectItem>
-              <SelectItem value="30d">Last 30 Days</SelectItem>
-              <SelectItem value="90d">Last 90 Days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" className="gap-2">
-            <Download className="w-4 h-4" /> Export PDF
+        <div className="flex flex-wrap items-center gap-3">
+          <AnalyticsDateFilter
+            window={window}
+            startDate={startDate}
+            endDate={endDate}
+            activeRange={activeRange}
+            onWindowChange={handleWindowChange}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
+          />
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleExport}
+            disabled={isExporting}
+          >
+            <Download className="w-4 h-4" />
+            {isExporting ? "Generating..." : "Export PDF"}
           </Button>
         </div>
       </div>

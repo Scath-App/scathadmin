@@ -118,9 +118,9 @@ export default function ReferralPage() {
                 {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </div>
-          ) : (
+          ) : isAdmin ? (
             <Button className="bg-blue text-white" onClick={startEdit}>Edit Settings</Button>
-          )
+          ) : null
         }
       />
 

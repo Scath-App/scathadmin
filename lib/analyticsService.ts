@@ -57,15 +57,45 @@ export type AdminAnalyticsOverviewResponse = {
   };
 };
 
+export type AnalyticsQueryParams = {
+  window?: AdminAnalyticsWindow;
+  startDate?: string;
+  endDate?: string;
+  timezone?: string;
+};
+
+const buildAnalyticsParams = (
+  params?: AdminAnalyticsWindow | AnalyticsQueryParams,
+  timezone?: string
+): URLSearchParams => {
+  const searchParams = new URLSearchParams();
+  if (typeof params === "string") {
+    searchParams.append("window", params);
+    if (timezone) searchParams.append("timezone", timezone);
+  } else if (params) {
+    if (params.startDate && params.endDate) {
+      searchParams.append("startDate", params.startDate);
+      searchParams.append("endDate", params.endDate);
+      if (params.window) searchParams.append("window", params.window);
+    } else {
+      searchParams.append("window", params.window || "30d");
+    }
+    if (params.timezone || timezone) {
+      searchParams.append("timezone", params.timezone || timezone || "");
+    }
+  } else {
+    searchParams.append("window", "30d");
+    if (timezone) searchParams.append("timezone", timezone);
+  }
+  return searchParams;
+};
+
 export const getAdminAnalyticsOverview = async (
-  window: AdminAnalyticsWindow = "30d",
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
   timezone?: string
 ): Promise<AdminAnalyticsOverviewResponse> => {
-  const params = new URLSearchParams({ window });
-  if (timezone) {
-    params.append("timezone", timezone);
-  }
-  const response = await api.get(`/admin/analytics/overview?${params.toString()}`);
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/overview?${searchParams.toString()}`);
   return response.data;
 };
 
@@ -110,12 +140,11 @@ export type VolumeAnalyticsResponse = {
 };
 
 export const getVolumeAnalytics = async (
-  window: AdminAnalyticsWindow = "30d",
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
   timezone?: string
 ): Promise<VolumeAnalyticsResponse> => {
-  const params = new URLSearchParams({ window });
-  if (timezone) params.append("timezone", timezone);
-  const response = await api.get(`/admin/analytics/volume?${params.toString()}`);
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/volume?${searchParams.toString()}`);
   return response.data;
 };
 
@@ -165,12 +194,11 @@ export type SaveboxAnalyticsResponse = {
 };
 
 export const getSaveboxAnalytics = async (
-  window: AdminAnalyticsWindow = "30d",
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
   timezone?: string
 ): Promise<SaveboxAnalyticsResponse> => {
-  const params = new URLSearchParams({ window });
-  if (timezone) params.append("timezone", timezone);
-  const response = await api.get(`/admin/analytics/savebox?${params.toString()}`);
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/savebox?${searchParams.toString()}`);
   return response.data;
 };
 
@@ -219,12 +247,11 @@ export type OpportunityAnalyticsResponse = {
 };
 
 export const getOpportunityAnalytics = async (
-  window: AdminAnalyticsWindow = "30d",
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
   timezone?: string
 ): Promise<OpportunityAnalyticsResponse> => {
-  const params = new URLSearchParams({ window });
-  if (timezone) params.append("timezone", timezone);
-  const response = await api.get(`/admin/analytics/opportunities?${params.toString()}`);
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/opportunity?${searchParams.toString()}`);
   return response.data;
 };
 
@@ -287,11 +314,80 @@ export type EquityAnalyticsResponse = {
 };
 
 export const getEquityAnalytics = async (
-  window: AdminAnalyticsWindow = "30d",
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
   timezone?: string
 ): Promise<EquityAnalyticsResponse> => {
-  const params = new URLSearchParams({ window });
-  if (timezone) params.append("timezone", timezone);
-  const response = await api.get(`/admin/analytics/equity?${params.toString()}`);
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/equity?${searchParams.toString()}`);
   return response.data;
+};
+
+// ─── PDF Report Downloads ─────────────────────────────────────────────────────
+
+const triggerBlobDownload = (blob: Blob, filename: string): void => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
+
+export const downloadVolumeReportPdf = async (
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
+  timezone?: string
+): Promise<void> => {
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/volume/export?${searchParams.toString()}`, {
+    responseType: "blob",
+  });
+  const filename = typeof params === "object" && params.startDate && params.endDate
+    ? `volume-report-${params.startDate}-to-${params.endDate}.pdf`
+    : `volume-report-${typeof params === "string" ? params : params?.window || "30d"}.pdf`;
+  triggerBlobDownload(response.data as Blob, filename);
+};
+
+export const downloadSaveboxReportPdf = async (
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
+  timezone?: string
+): Promise<void> => {
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/savebox/export?${searchParams.toString()}`, {
+    responseType: "blob",
+  });
+  const filename = typeof params === "object" && params.startDate && params.endDate
+    ? `savebox-report-${params.startDate}-to-${params.endDate}.pdf`
+    : `savebox-report-${typeof params === "string" ? params : params?.window || "30d"}.pdf`;
+  triggerBlobDownload(response.data as Blob, filename);
+};
+
+export const downloadOpportunitiesReportPdf = async (
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
+  timezone?: string
+): Promise<void> => {
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/opportunity/export?${searchParams.toString()}`, {
+    responseType: "blob",
+  });
+  const filename = typeof params === "object" && params.startDate && params.endDate
+    ? `opportunities-report-${params.startDate}-to-${params.endDate}.pdf`
+    : `opportunities-report-${typeof params === "string" ? params : params?.window || "30d"}.pdf`;
+  triggerBlobDownload(response.data as Blob, filename);
+};
+
+export const downloadEquityReportPdf = async (
+  params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
+  timezone?: string
+): Promise<void> => {
+  const searchParams = buildAnalyticsParams(params, timezone);
+  const response = await api.get(`/admin/analytics/equity/export?${searchParams.toString()}`, {
+    responseType: "blob",
+  });
+  const filename = typeof params === "object" && params.startDate && params.endDate
+    ? `equity-report-${params.startDate}-to-${params.endDate}.pdf`
+    : `equity-report-${typeof params === "string" ? params : params?.window || "30d"}.pdf`;
+  triggerBlobDownload(response.data as Blob, filename);
 };

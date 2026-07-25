@@ -4,7 +4,9 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { useQuery } from "@tanstack/react-query";
-import { getVolumeAnalytics, AdminAnalyticsWindow } from "@/lib/analyticsService";
+import { getVolumeAnalytics, downloadVolumeReportPdf, AdminAnalyticsWindow } from "@/lib/analyticsService";
+import { AnalyticsDateFilter } from "@/components/analytics/AnalyticsDateFilter";
+import { format, subDays } from "date-fns";
 import { StatCard } from "@/components/ui/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -17,19 +19,49 @@ import {
 import {
   TrendingUp, ArrowDownRight, ArrowUpRight, ArrowLeftRight, Download, Calendar, Activity, AlertTriangle, ShieldCheck
 } from "lucide-react";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
 export default function VolumeAnalyticsPage() {
+  const today = new Date();
   const [window, setWindow] = useState<AdminAnalyticsWindow>("30d");
-  
+  const [startDate, setStartDate] = useState(format(subDays(today, 30), "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(format(today, "yyyy-MM-dd"));
+  const [activeRange, setActiveRange] = useState<number | null>(30);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const queryParam = activeRange !== null ? { window } : { startDate, endDate };
+
   const { data, isLoading } = useQuery({
-    queryKey: ["analytics-volume", window],
-    queryFn: () => getVolumeAnalytics(window),
+    queryKey: ["analytics-volume", activeRange !== null ? window : `${startDate}_${endDate}`],
+    queryFn: () => getVolumeAnalytics(queryParam),
   });
+
+  const handleWindowChange = (w: AdminAnalyticsWindow, days: number) => {
+    setWindow(w);
+    setActiveRange(days);
+    setStartDate(format(subDays(today, days), "yyyy-MM-dd"));
+    setEndDate(format(today, "yyyy-MM-dd"));
+  };
+
+  const handleStartDateChange = (date: string) => {
+    setStartDate(date);
+    setActiveRange(null);
+  };
+
+  const handleEndDateChange = (date: string) => {
+    setEndDate(date);
+    setActiveRange(null);
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await downloadVolumeReportPdf(queryParam);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const cards = data?.cards;
   const charts = data?.charts;
@@ -48,7 +80,7 @@ export default function VolumeAnalyticsPage() {
     <div className="px-6 sm:px-8 pt-8 pb-16 space-y-8 animate-in fade-in duration-500">
       
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <Link href="/dashboard" className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors mb-2">
             <ChevronLeft className="w-4 h-4 mr-1" /> Back to Dashboard
@@ -61,21 +93,24 @@ export default function VolumeAnalyticsPage() {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <Select value={window} onValueChange={(val) => setWindow(val as AdminAnalyticsWindow)}>
-            <SelectTrigger className="w-[140px] bg-white">
-              <Calendar className="w-4 h-4 mr-2 text-gray-500" />
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1d">Last 24 Hours</SelectItem>
-              <SelectItem value="7d">Last 7 Days</SelectItem>
-              <SelectItem value="30d">Last 30 Days</SelectItem>
-              <SelectItem value="90d">Last 90 Days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" className="gap-2">
-            <Download className="w-4 h-4" /> Export PDF
+        <div className="flex flex-wrap items-center gap-3">
+          <AnalyticsDateFilter
+            window={window}
+            startDate={startDate}
+            endDate={endDate}
+            activeRange={activeRange}
+            onWindowChange={handleWindowChange}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
+          />
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleExport}
+            disabled={isExporting}
+          >
+            <Download className="w-4 h-4" />
+            {isExporting ? "Generating..." : "Export PDF"}
           </Button>
         </div>
       </div>

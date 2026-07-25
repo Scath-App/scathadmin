@@ -28,6 +28,7 @@ import * as z from "zod";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 const oppSchema = z.object({
   name: z.string().min(1, "Required"),
@@ -44,6 +45,7 @@ const oppSchema = z.object({
 
 export default function InvestmentsPage() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOpp, setEditingOpp] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -160,12 +162,16 @@ export default function InvestmentsPage() {
       headerClassName: "text-right",
       render: (id, row) => (
         <div className="flex items-center justify-end gap-1">
-          <Button size="sm" variant="ghost" className="text-blue hover:bg-blue/5" onClick={() => openEdit(row)}>
-            <Edit className="w-3.5 h-3.5" />
-          </Button>
-          <Button size="sm" variant="ghost" className="text-red hover:bg-red/5" onClick={() => setDeletingId(id)}>
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
+          {isAdmin && (
+            <>
+              <Button size="sm" variant="ghost" className="text-blue hover:bg-blue/5" onClick={() => openEdit(row)}>
+                <Edit className="w-3.5 h-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="text-red hover:bg-red/5" onClick={() => setDeletingId(id)}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </>
+          )}
         </div>
       ),
     },
@@ -177,9 +183,11 @@ export default function InvestmentsPage() {
         title="Investment Opportunities"
         subtitle="Manage all available investment opportunities on the platform."
         actions={
-          <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
-            <Plus className="w-4 h-4" /> New Opportunity
-          </Button>
+          isAdmin ? (
+            <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
+              <Plus className="w-4 h-4" /> New Opportunity
+            </Button>
+          ) : null
         }
       />
 

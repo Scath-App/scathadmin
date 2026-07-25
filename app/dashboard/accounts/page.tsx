@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getAccounts, createMainAccount, updateAccountPurpose,
   syncSingleAccount, searchAccounts,
-  refreshSingleAccount
+  refreshSingleAccount, syncAllAccounts
 } from "@/lib/financeService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -149,6 +149,18 @@ export default function AccountsPage() {
       toast.success("Balance snapshot refreshed.");
     },
     onError: (e: any) => toast.error(e.response?.data?.message ?? "Refresh failed."),
+  });
+
+  const refreshAllMutation = useMutation({
+    mutationFn: syncAllAccounts,
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      toast.success(
+        data?.message || "Bulk account balance refresh queued in background."
+      );
+    },
+    onError: (e: any) =>
+      toast.error(e.response?.data?.message ?? "Failed to refresh account balances."),
   });
 
 
@@ -374,7 +386,16 @@ export default function AccountsPage() {
         subtitle="Platform accounts with purpose, balance, and sync status."
         actions={
           <div className="flex items-center gap-2">
-            <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={() => setIsCreateOpen(true)}>
+            <Button
+              variant="outline"
+              className="gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 h-9 text-xs font-medium"
+              disabled={refreshAllMutation.isPending}
+              onClick={() => refreshAllMutation.mutate()}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshAllMutation.isPending ? "animate-spin text-blue" : ""}`} />
+              {refreshAllMutation.isPending ? "Refreshing All..." : "Refresh All Balances"}
+            </Button>
+            <Button className="bg-blue hover:bg-darkBlue text-white gap-2 h-9 text-xs font-medium" onClick={() => setIsCreateOpen(true)}>
               <Plus className="h-4 w-4" /> Create Account
             </Button>
           </div>

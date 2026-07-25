@@ -142,12 +142,16 @@ export default function SaveboxConfigPage() {
       header: "Actions",
       render: (id, row) => (
         <div className="flex items-center justify-end gap-1">
-          <Button size="sm" variant="ghost" className="text-blue hover:bg-blue/5" onClick={() => openEdit(row)}>
-            <Edit className="w-3.5 h-3.5" />
-          </Button>
-          <Button size="sm" variant="ghost" className="text-red hover:bg-red/5" onClick={() => setDeletingId(id)}>
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
+          {isAdmin && (
+            <>
+              <Button size="sm" variant="ghost" className="text-blue hover:bg-blue/5" onClick={() => openEdit(row)}>
+                <Edit className="w-3.5 h-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="text-red hover:bg-red/5" onClick={() => setDeletingId(id)}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </>
+          )}
         </div>
       ),
     },
@@ -159,9 +163,11 @@ export default function SaveboxConfigPage() {
         title="Savebox Configurations"
         subtitle="Manage interest rates and duration settings for saveboxes."
         actions={
-          <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
-            <Plus className="w-4 h-4" /> New Config
-          </Button>
+          isAdmin ? (
+            <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
+              <Plus className="w-4 h-4" /> New Config
+            </Button>
+          ) : null
         }
       />
 
