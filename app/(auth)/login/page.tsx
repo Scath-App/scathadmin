@@ -14,10 +14,11 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
-import { loginAdmin } from "@/lib/authService";
+import { loginAdmin, loginWithGoogleAdmin } from "@/lib/authService";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 
 const formSchema = z.object({
   identifier: z.string().email({
@@ -29,6 +30,16 @@ const formSchema = z.object({
 });
 
 export default function LoginPage() {
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+
+  return (
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <LoginForm />
+    </GoogleOAuthProvider>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const setTokens = useAuthStore((state) => state.setTokens);
   const setUser = useAuthStore((state) => state.setUser);
@@ -41,22 +52,24 @@ export default function LoginPage() {
     },
   });
 
+  const handleAuthSuccess = (data: any) => {
+    const role = (data.user?.role ?? "").toUpperCase();
+    const ALLOWED_ROLES = ["ADMIN", "STAFF", "PARTNER"];
+    if (!ALLOWED_ROLES.includes(role)) {
+      toast.error(
+        `Access denied: your account role ("${data.user?.role ?? "unknown"}") does not have permission to access the dashboard.`,
+      );
+      return;
+    }
+    setTokens(data.access_token, data.refresh_token);
+    setUser(data.user);
+    toast.success("Login successful!");
+    router.push("/dashboard");
+  };
+
   const loginMutation = useMutation({
     mutationFn: loginAdmin,
-    onSuccess: (data) => {
-      const role = (data.user?.role ?? "").toUpperCase();
-      const ALLOWED_ROLES = ["ADMIN", "STAFF", "PARTNER"];
-      if (!ALLOWED_ROLES.includes(role)) {
-        toast.error(
-          `Access denied: your account role ("${data.user?.role ?? "unknown"}") does not have permission to access the dashboard.`,
-        );
-        return;
-      }
-      setTokens(data.access_token, data.refresh_token);
-      setUser(data.user);
-      toast.success("Login successful!");
-      router.push("/dashboard");
-    },
+    onSuccess: handleAuthSuccess,
     onError: (error: any) => {
       toast.error(
         error.response?.data?.message || "Login failed. Please try again.",
@@ -64,9 +77,21 @@ export default function LoginPage() {
     },
   });
 
+  const googleLoginMutation = useMutation({
+    mutationFn: loginWithGoogleAdmin,
+    onSuccess: handleAuthSuccess,
+    onError: (error: any) => {
+      toast.error(
+        error.response?.data?.message || "Google login failed. Please try again.",
+      );
+    },
+  });
+
   function onSubmit(values: z.infer<typeof formSchema>) {
     loginMutation.mutate(values);
   }
+
+  const isPending = loginMutation.isPending || googleLoginMutation.isPending;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-900">
@@ -111,13 +136,41 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full bg-blue hover:bg-darkBlue text-white"
-              disabled={loginMutation.isPending}
+              disabled={isPending}
             >
               {loginMutation.isPending ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </Form>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300 dark:border-zinc-700" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="bg-white px-3 text-gray-500 dark:bg-zinc-800 dark:text-gray-400">
+              Or continue with
+            </span>
+          </div>
+        </div>
+
+        <div className="flex justify-center w-full">
+          <GoogleLogin
+            onSuccess={(credentialResponse) => {
+              if (credentialResponse.credential) {
+                googleLoginMutation.mutate(credentialResponse.credential);
+              }
+            }}
+            onError={() => {
+              toast.error("Google sign in failed. Please try again.");
+            }}
+            useOneTap={false}
+            theme="outline"
+            shape="rectangular"
+          />
+        </div>
       </div>
     </div>
   );
 }
+

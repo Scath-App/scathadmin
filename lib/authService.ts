@@ -4,3 +4,8 @@ export const loginAdmin = async (data: any) => {
   const response = await api.post("auth/login", data);
   return response.data;
 };
+
+export const loginWithGoogleAdmin = async (idToken: string) => {
+  const response = await api.post("auth/admin/google", { idToken });
+  return response.data;
+};
