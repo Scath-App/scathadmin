@@ -194,7 +194,13 @@ export const bulkDeleteUsers = async (userIds: number[]) => {
 };
 
 export interface CommunicatePayload {
-  target: "ALL_USERS" | "SPECIFIC_USERS";
+  target:
+    | "ALL_USERS"
+    | "ACTIVE_USERS"
+    | "PENDING_USERS"
+    | "INCOMPLETE_USERS"
+    | "SUSPENDED_USERS"
+    | "SPECIFIC_USERS";
   userIds?: number[];
   channel: "EMAIL" | "PUSH" | "BOTH";
   subject: string;

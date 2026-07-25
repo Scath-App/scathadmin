@@ -21,8 +21,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useRouter } from "next/navigation";
 import { Switch } from "@/components/ui/switch";
-import { Plus, RefreshCw, RefreshCcw, Search, X, Lock, ShieldCheck } from "lucide-react";
+import { Plus, RefreshCw, RefreshCcw, Search, X, Lock, ShieldCheck, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "@/hooks/useRole";
 import { useForm } from "react-hook-form";
@@ -50,12 +51,14 @@ const PURPOSE_COLORS: Record<string, string> = {
 const LIMIT = 25;
 
 export default function AccountsPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { isAdmin } = useRole();
   const [page, setPage] = useState(1);
   const [isMainFilter, setIsMainFilter] = useState<boolean | undefined>(undefined);
   const [isSubFilter, setIsSubFilter] = useState<boolean | undefined>(undefined);
   const [driftFilter, setDriftFilter] = useState<string | undefined>(undefined);
+  const [sortFilter, setSortFilter] = useState<string>("default");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingPurposeId, setEditingPurposeId] = useState<number | null>(null);
   const [newPurpose, setNewPurpose] = useState("");
@@ -63,8 +66,24 @@ export default function AccountsPage() {
   const [searchResult, setSearchResult] = useState<any>(null);
   const [searchLoading, setSearchLoading] = useState(false);
 
+  let sortByParam: "balance" | "transactions" | undefined = undefined;
+  let sortOrderParam: "asc" | "desc" | undefined = undefined;
+  if (sortFilter === "balance-desc") {
+    sortByParam = "balance";
+    sortOrderParam = "desc";
+  } else if (sortFilter === "balance-asc") {
+    sortByParam = "balance";
+    sortOrderParam = "asc";
+  } else if (sortFilter === "tx-desc") {
+    sortByParam = "transactions";
+    sortOrderParam = "desc";
+  } else if (sortFilter === "tx-asc") {
+    sortByParam = "transactions";
+    sortOrderParam = "asc";
+  }
+
   const { data, isLoading } = useQuery({
-    queryKey: ["accounts", page, isMainFilter, isSubFilter, driftFilter],
+    queryKey: ["accounts", page, isMainFilter, isSubFilter, driftFilter, sortFilter],
     queryFn: () =>
       getAccounts({
         page,
@@ -72,6 +91,7 @@ export default function AccountsPage() {
         ...(isMainFilter !== undefined ? { isMainAccount: isMainFilter } : {}),
         ...(isSubFilter !== undefined ? { isSubAccount: isSubFilter } : {}),
         ...(driftFilter ? { driftStatus: driftFilter } : {}),
+        ...(sortByParam ? { sortBy: sortByParam, sortOrder: sortOrderParam } : {}),
       }),
     enabled: isAdmin,
   });
@@ -273,6 +293,22 @@ export default function AccountsPage() {
       },
     },
     {
+      key: "transactionCount",
+      header: "Transactions",
+      className: "w-[120px] px-6 py-4 text-center",
+      headerClassName: "w-[120px] px-6 text-center",
+      render: (v, row) => {
+        const count = v ?? row.userTransactionCount ?? 0;
+        return (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="font-mono font-bold text-xs text-gray-900 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
+              {count.toLocaleString()} {count === 1 ? "tx" : "txs"}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
       key: "status",
       header: "Status",
       className: "w-[110px] px-6 py-4",
@@ -282,8 +318,8 @@ export default function AccountsPage() {
     {
       key: "id",
       header: "Actions",
-      className: "w-[180px] px-6 py-4 text-right",
-      headerClassName: "w-[180px] px-6 text-right",
+      className: "w-[210px] px-6 py-4 text-right",
+      headerClassName: "w-[210px] px-6 text-right",
       render: (id, row) => {
         const isRefreshingThis = refreshOneMutation.isPending && refreshOneMutation.variables === row.accountId;
         const isSyncingThis = syncOneMutation.isPending && syncOneMutation.variables === row.accountId;
@@ -316,6 +352,18 @@ export default function AccountsPage() {
               </div>
             ) : (
               <>
+                {row.userId && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-7 px-2 flex items-center gap-1 font-medium"
+                    title="View user transactions"
+                    onClick={() => router.push(`/dashboard/users/${row.userId}`)}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View Txs
+                  </Button>
+                )}
                 {row.isMainAccount && (
                   <Button
                     size="sm"
@@ -431,6 +479,23 @@ export default function AccountsPage() {
                 <SelectItem value="minor">Minor Drift</SelectItem>
                 <SelectItem value="critical">Critical Drift</SelectItem>
                 <SelectItem value="auto-swept">Auto-Swept</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Sort By Select */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Sort By:</span>
+            <Select value={sortFilter} onValueChange={(v) => { setSortFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-[195px] h-9 bg-white border-gray-200 text-xs font-semibold shadow-none">
+                <SelectValue placeholder="Sort order" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default Order</SelectItem>
+                <SelectItem value="tx-desc">Highest Tx Count</SelectItem>
+                <SelectItem value="tx-asc">Lowest Tx Count</SelectItem>
+                <SelectItem value="balance-desc">Highest Balance First</SelectItem>
+                <SelectItem value="balance-asc">Lowest Balance First</SelectItem>
               </SelectContent>
             </Select>
           </div>

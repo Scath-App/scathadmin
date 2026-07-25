@@ -62,6 +62,8 @@ export type AnalyticsQueryParams = {
   startDate?: string;
   endDate?: string;
   timezone?: string;
+  page?: number;
+  limit?: number;
 };
 
 const buildAnalyticsParams = (
@@ -82,6 +84,12 @@ const buildAnalyticsParams = (
     }
     if (params.timezone || timezone) {
       searchParams.append("timezone", params.timezone || timezone || "");
+    }
+    if (params.page) {
+      searchParams.append("page", String(params.page));
+    }
+    if (params.limit) {
+      searchParams.append("limit", String(params.limit));
     }
   } else {
     searchParams.append("window", "30d");
@@ -147,6 +155,51 @@ export const getVolumeAnalytics = async (
   const response = await api.get(`/admin/analytics/volume?${searchParams.toString()}`);
   return response.data;
 };
+
+// --- Top Users by Transaction Count (Suspicious Activity Monitoring) ---
+
+export type TopUserTransactionItem = {
+  userId: number;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phoneNumber: string | null;
+  role: string;
+  status: string;
+  transactionCount: number;
+  totalVolumeInKobo: number;
+  totalVolumeInNaira: number;
+  avgTxSizeInKobo: number;
+  avgTxSizeInNaira: number;
+  isSuspiciousFlag?: boolean;
+};
+
+export type TopUsersByTransactionResponse = {
+  window: AdminAnalyticsWindow;
+  timezone: string;
+  generatedAt: string;
+  sort: "asc" | "desc";
+  data: TopUserTransactionItem[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+export const getTopUsersByTransactionCount = async (
+  params: (AnalyticsQueryParams & { sort?: "asc" | "desc"; limit?: number; page?: number }) | AdminAnalyticsWindow = "30d",
+  timezone?: string
+): Promise<TopUsersByTransactionResponse> => {
+  const searchParams = buildAnalyticsParams(params, timezone);
+  if (typeof params === "object" && params.sort) {
+    searchParams.append("sort", params.sort);
+  }
+  const response = await api.get(`/admin/analytics/users/top-by-transactions?${searchParams.toString()}`);
+  return response.data;
+};
+
 
 // --- Savebox Analytics ---
 
@@ -220,6 +273,12 @@ export type OpportunityAnalyticsResponse = {
     payoutSuccessRate: number;
   };
   charts: {
+    opportunitiesMeta?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
     opportunities: Array<{
       id: number;
       name: string;
@@ -251,7 +310,7 @@ export const getOpportunityAnalytics = async (
   timezone?: string
 ): Promise<OpportunityAnalyticsResponse> => {
   const searchParams = buildAnalyticsParams(params, timezone);
-  const response = await api.get(`/admin/analytics/opportunity?${searchParams.toString()}`);
+  const response = await api.get(`/admin/analytics/opportunities?${searchParams.toString()}`);
   return response.data;
 };
 
@@ -272,6 +331,12 @@ export type EquityAnalyticsResponse = {
     lockInComplianceCount: number;
   };
   charts: {
+    companiesMeta?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
     companies: Array<{
       id: number;
       companyName: string;
@@ -369,7 +434,7 @@ export const downloadOpportunitiesReportPdf = async (
   timezone?: string
 ): Promise<void> => {
   const searchParams = buildAnalyticsParams(params, timezone);
-  const response = await api.get(`/admin/analytics/opportunity/export?${searchParams.toString()}`, {
+  const response = await api.get(`/admin/analytics/opportunities/export?${searchParams.toString()}`, {
     responseType: "blob",
   });
   const filename = typeof params === "object" && params.startDate && params.endDate
@@ -390,4 +455,86 @@ export const downloadEquityReportPdf = async (
     ? `equity-report-${params.startDate}-to-${params.endDate}.pdf`
     : `equity-report-${typeof params === "string" ? params : params?.window || "30d"}.pdf`;
   triggerBlobDownload(response.data as Blob, filename);
+};
+
+// ─── Suspicious Activity ───────────────────────────────────────────────────────
+
+export type AlertStatus = "OPEN" | "DISMISSED" | "ACTIONED";
+export type AlertAction = "RESTRICT_LIMIT" | "SUSPEND";
+
+export type SuspiciousActivityAlert = {
+  id: number;
+  userId: number;
+  ruleCode: string;
+  ruleLabel: string;
+  detectedDateBucket: string;
+  detectedAt: string;
+  evidence: Record<string, unknown>;
+  status: AlertStatus;
+  reviewedAt: string | null;
+  reviewedByAdminId: number | null;
+  adminNote: string | null;
+  actionTaken: AlertAction | null;
+  restrictedDailyLimitInKobo: number | null;
+  userName: string | null;
+  userEmail: string | null;
+  userPhone: string | null;
+};
+
+export type SuspiciousActivityRule = {
+  id: number;
+  ruleCode: string;
+  label: string;
+  description: string | null;
+  isEnabled: boolean;
+  thresholdConfig: Record<string, number>;
+  sortOrder: number;
+};
+
+export type AlertsResponse = {
+  data: SuspiciousActivityAlert[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export const getSuspiciousAlerts = async (params?: {
+  status?: AlertStatus;
+  ruleCode?: string;
+  page?: number;
+  limit?: number;
+}): Promise<AlertsResponse> => {
+  const response = await api.get("admin/analytics/alerts/suspicious", { params });
+  return response.data;
+};
+
+export const dismissAlert = async (id: number, note?: string): Promise<SuspiciousActivityAlert> => {
+  const response = await api.patch(`admin/analytics/alerts/suspicious/${id}/dismiss`, { note });
+  return response.data;
+};
+
+export const restrictUserLimit = async (id: number, newDailyLimitInNaira: number, note?: string): Promise<SuspiciousActivityAlert> => {
+  const response = await api.patch(`admin/analytics/alerts/suspicious/${id}/restrict-limit`, { newDailyLimitInNaira, note });
+  return response.data;
+};
+
+export const suspendUserFromAlert = async (id: number, note?: string): Promise<SuspiciousActivityAlert> => {
+  const response = await api.patch(`admin/analytics/alerts/suspicious/${id}/suspend`, { note });
+  return response.data;
+};
+
+export const getSuspiciousRules = async (): Promise<SuspiciousActivityRule[]> => {
+  const response = await api.get("admin/analytics/alerts/rules");
+  return response.data;
+};
+
+export const updateSuspiciousRule = async (
+  id: number,
+  patch: Partial<Pick<SuspiciousActivityRule, "isEnabled" | "label" | "description" | "thresholdConfig" | "sortOrder">>,
+): Promise<SuspiciousActivityRule> => {
+  const response = await api.patch(`admin/analytics/alerts/rules/${id}`, patch);
+  return response.data;
+};
+
+export const triggerSuspiciousScan = async (): Promise<{ message: string }> => {
+  const response = await api.post("admin/analytics/alerts/scan/trigger");
+  return response.data;
 };

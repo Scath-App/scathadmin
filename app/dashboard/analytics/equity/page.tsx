@@ -24,18 +24,22 @@ export default function EquityAnalyticsPage() {
   const [startDate, setStartDate] = useState(format(subDays(today, 30), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(today, "yyyy-MM-dd"));
   const [activeRange, setActiveRange] = useState<number | null>(30);
+  const [companyPage, setCompanyPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
   
-  const queryParam = activeRange !== null ? { window } : { startDate, endDate };
+  const queryParam = activeRange !== null 
+    ? { window, page: companyPage, limit: 10 } 
+    : { startDate, endDate, page: companyPage, limit: 10 };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["analytics-equity", activeRange !== null ? window : `${startDate}_${endDate}`],
+    queryKey: ["analytics-equity", activeRange !== null ? window : `${startDate}_${endDate}`, companyPage],
     queryFn: () => getEquityAnalytics(queryParam),
   });
 
   const handleWindowChange = (w: AdminAnalyticsWindow, days: number) => {
     setWindow(w);
     setActiveRange(days);
+    setCompanyPage(1);
     setStartDate(format(subDays(today, days), "yyyy-MM-dd"));
     setEndDate(format(today, "yyyy-MM-dd"));
   };
@@ -43,11 +47,13 @@ export default function EquityAnalyticsPage() {
   const handleStartDateChange = (date: string) => {
     setStartDate(date);
     setActiveRange(null);
+    setCompanyPage(1);
   };
 
   const handleEndDateChange = (date: string) => {
     setEndDate(date);
     setActiveRange(null);
+    setCompanyPage(1);
   };
 
   const handleExport = async () => {
@@ -218,6 +224,34 @@ export default function EquityAnalyticsPage() {
             </TableBody>
           </Table>
         </div>
+        {charts?.companiesMeta && charts.companiesMeta.totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100/80 bg-gray-50/50 text-xs">
+            <span className="text-gray-500 font-mono">
+              Page <span className="font-semibold text-gray-800">{charts.companiesMeta.page}</span> of{" "}
+              <span className="font-semibold text-gray-800">{charts.companiesMeta.totalPages}</span> ({charts.companiesMeta.total} listed companies)
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={companyPage <= 1 || isLoading}
+                onClick={() => setCompanyPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={companyPage >= charts.companiesMeta.totalPages || isLoading}
+                onClick={() => setCompanyPage((p) => p + 1)}
+                className="h-8 px-3 text-xs"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -23,18 +23,22 @@ export default function OpportunitiesAnalyticsPage() {
   const [startDate, setStartDate] = useState(format(subDays(today, 30), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(today, "yyyy-MM-dd"));
   const [activeRange, setActiveRange] = useState<number | null>(30);
+  const [oppPage, setOppPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
   
-  const queryParam = activeRange !== null ? { window } : { startDate, endDate };
+  const queryParam = activeRange !== null 
+    ? { window, page: oppPage, limit: 10 } 
+    : { startDate, endDate, page: oppPage, limit: 10 };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["analytics-opportunities", activeRange !== null ? window : `${startDate}_${endDate}`],
+    queryKey: ["analytics-opportunities", activeRange !== null ? window : `${startDate}_${endDate}`, oppPage],
     queryFn: () => getOpportunityAnalytics(queryParam),
   });
 
   const handleWindowChange = (w: AdminAnalyticsWindow, days: number) => {
     setWindow(w);
     setActiveRange(days);
+    setOppPage(1);
     setStartDate(format(subDays(today, days), "yyyy-MM-dd"));
     setEndDate(format(today, "yyyy-MM-dd"));
   };
@@ -42,11 +46,13 @@ export default function OpportunitiesAnalyticsPage() {
   const handleStartDateChange = (date: string) => {
     setStartDate(date);
     setActiveRange(null);
+    setOppPage(1);
   };
 
   const handleEndDateChange = (date: string) => {
     setEndDate(date);
     setActiveRange(null);
+    setOppPage(1);
   };
 
   const handleExport = async () => {
@@ -158,11 +164,11 @@ export default function OpportunitiesAnalyticsPage() {
         </div>
         <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 shadow-sm flex flex-col justify-center text-center">
           <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider mb-1">Avg ROI</p>
-          <p className="text-xl font-bold text-emerald-700">{isLoading ? "..." : `${cards?.avgRoi?.toFixed(1)}%`}</p>
+          <p className="text-xl font-bold text-emerald-700">{isLoading ? "..." : cards?.avgRoi != null ? `${cards.avgRoi.toFixed(1)}%` : "—"}</p>
         </div>
         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm flex flex-col justify-center text-center">
           <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider mb-1">Payout Success</p>
-          <p className="text-xl font-bold text-blue-700">{isLoading ? "..." : `${cards?.payoutSuccessRate?.toFixed(1)}%`}</p>
+          <p className="text-xl font-bold text-blue-700">{isLoading ? "..." : cards?.payoutSuccessRate != null ? `${cards.payoutSuccessRate.toFixed(1)}%` : "—"}</p>
         </div>
       </div>
 
@@ -234,6 +240,34 @@ export default function OpportunitiesAnalyticsPage() {
             </TableBody>
           </Table>
         </div>
+        {charts?.opportunitiesMeta && charts.opportunitiesMeta.totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100/80 bg-gray-50/50 text-xs">
+            <span className="text-gray-500 font-mono">
+              Page <span className="font-semibold text-gray-800">{charts.opportunitiesMeta.page}</span> of{" "}
+              <span className="font-semibold text-gray-800">{charts.opportunitiesMeta.totalPages}</span> ({charts.opportunitiesMeta.total} opportunities)
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={oppPage <= 1 || isLoading}
+                onClick={() => setOppPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={oppPage >= charts.opportunitiesMeta.totalPages || isLoading}
+                onClick={() => setOppPage((p) => p + 1)}
+                className="h-8 px-3 text-xs"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
     </div>

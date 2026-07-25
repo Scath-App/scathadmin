@@ -13,6 +13,8 @@ export const getAccounts = async (params?: {
   isSubAccount?: boolean;
   driftStatus?: string;
   hasDrift?: boolean;
+  sortBy?: "balance" | "transactions" | "createdAt";
+  sortOrder?: "asc" | "desc";
 }) => {
   const response = await api.get("admin/accounts", { params });
   return response.data;

@@ -204,6 +204,7 @@ export const navSections: NavSection[] = [
         children: [
           { label: "Overview", href: "/dashboard/analytics", icon: LineChart },
           { label: "Platform Volume", href: "/dashboard/analytics/volume", icon: BarChart3 },
+          { label: "Suspicious Activity", href: "/dashboard/analytics/suspicious", icon: ShieldAlert },
           { label: "Savebox", href: "/dashboard/analytics/savebox", icon: PiggyBank },
           { label: "Investments", href: "/dashboard/analytics/opportunities", icon: Briefcase },
           { label: "Equity", href: "/dashboard/analytics/equity", icon: TrendingUp },

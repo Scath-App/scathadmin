@@ -37,7 +37,14 @@ import {
 import { communicateUsers, searchUsers, CommunicatePayload } from "@/lib/userService";
 
 const communicateSchema = z.object({
-  target: z.enum(["ALL_USERS", "SPECIFIC_USERS"]),
+  target: z.enum([
+    "ALL_USERS",
+    "ACTIVE_USERS",
+    "PENDING_USERS",
+    "INCOMPLETE_USERS",
+    "SUSPENDED_USERS",
+    "SPECIFIC_USERS",
+  ]),
   channel: z.enum(["EMAIL", "PUSH", "BOTH"]),
   subject: z.string().min(3, "Subject/Title must be at least 3 characters").max(100, "Subject is too long"),
   message: z.string().min(10, "Message body must be at least 10 characters").max(2000, "Message body is too long"),
@@ -52,10 +59,18 @@ export interface PreselectedUser {
   lastName?: string;
 }
 
+export type CommunicateTargetScope =
+  | "ALL_USERS"
+  | "ACTIVE_USERS"
+  | "PENDING_USERS"
+  | "INCOMPLETE_USERS"
+  | "SUSPENDED_USERS"
+  | "SPECIFIC_USERS";
+
 interface CommunicateModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultTarget?: "ALL_USERS" | "SPECIFIC_USERS";
+  defaultTarget?: CommunicateTargetScope;
   preselectedUsers?: PreselectedUser[];
   onSuccess?: () => void;
 }
@@ -180,8 +195,26 @@ export function CommunicateModal({
     setSelectedRecipients((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const isBroadcasting = selectedTarget === "ALL_USERS";
+  const isBroadcasting = selectedTarget !== "SPECIFIC_USERS";
   const recipientCount = selectedRecipients.length;
+
+  const getHeaderSubtitle = () => {
+    switch (selectedTarget) {
+      case "ALL_USERS":
+        return "Broadcast message to all users";
+      case "ACTIVE_USERS":
+        return "Broadcast message to all fully active users";
+      case "PENDING_USERS":
+        return "Broadcast message to pending setup users";
+      case "INCOMPLETE_USERS":
+        return "Broadcast message to incomplete account users";
+      case "SUSPENDED_USERS":
+        return "Broadcast message to suspended users";
+      case "SPECIFIC_USERS":
+      default:
+        return `Send message to selected users (${recipientCount})`;
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!communicationMutation.isPending) onOpenChange(v); }}>
@@ -197,7 +230,7 @@ export function CommunicateModal({
             <div>
               <DialogTitle className="text-lg font-bold text-white">Send Admin Communication</DialogTitle>
               <p className="text-xs text-blue-100/80 mt-0.5">
-                {isBroadcasting ? "Broadcast message to all users" : `Send message to selected users`}
+                {getHeaderSubtitle()}
               </p>
             </div>
           </div>
@@ -205,14 +238,62 @@ export function CommunicateModal({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-5 overflow-y-auto flex-1">
-            {/* Warning Banner for System-Wide Broadcasts */}
-            {isBroadcasting && (
+            {/* Context Banners for Broadcast Scopes */}
+            {selectedTarget === "ALL_USERS" && (
               <div className="flex gap-3 bg-amber-50 border border-amber-200/60 rounded-xl p-4 text-amber-900 text-sm animate-in fade-in slide-in-from-top-1 duration-200">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <span className="font-semibold">Caution: System-Wide Broadcast</span>
                   <p className="text-xs text-amber-800/90 leading-relaxed">
-                    This will queue push notifications and emails to <span className="font-bold underline">every user</span> in the system database. Ensure the subject and message content are proofread and approved.
+                    This will queue push notifications and emails to <span className="font-bold underline">every user</span> in the database. Ensure the content is proofread and approved.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {selectedTarget === "ACTIVE_USERS" && (
+              <div className="flex gap-3 bg-blue/10 border border-blue/20 rounded-xl p-4 text-blue text-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                <Megaphone className="w-5 h-5 text-blue shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-semibold">Target Scope: Fully Active Users Only</span>
+                  <p className="text-xs text-blue/90 leading-relaxed">
+                    This will queue notifications to all <span className="font-bold underline">fully active users</span> with provisioned bank accounts on the platform.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {selectedTarget === "PENDING_USERS" && (
+              <div className="flex gap-3 bg-indigo-50 border border-indigo-200/60 rounded-xl p-4 text-indigo-900 text-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                <Mail className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-semibold">Target Scope: Pending Setup Users</span>
+                  <p className="text-xs text-indigo-800/90 leading-relaxed">
+                    This will queue notifications to users with <span className="font-bold underline">pending setup or uncompleted onboarding</span>.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {selectedTarget === "INCOMPLETE_USERS" && (
+              <div className="flex gap-3 bg-gray-100 border border-gray-200 rounded-xl p-4 text-gray-800 text-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                <Mail className="w-5 h-5 text-gray-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-semibold">Target Scope: Incomplete Account Users</span>
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    This will queue notifications to users who have <span className="font-bold underline">abandoned or incomplete profiles</span>.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {selectedTarget === "SUSPENDED_USERS" && (
+              <div className="flex gap-3 bg-red/10 border border-red/20 rounded-xl p-4 text-red text-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                <AlertTriangle className="w-5 h-5 text-red shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-semibold">Target Scope: Suspended Users Only</span>
+                  <p className="text-xs text-red/90 leading-relaxed">
+                    This will queue notifications to <span className="font-bold underline">currently suspended accounts</span>.
                   </p>
                 </div>
               </div>
@@ -247,6 +328,10 @@ export function CommunicateModal({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="ALL_USERS">All Users (Broadcast)</SelectItem>
+                        <SelectItem value="ACTIVE_USERS">Fully Active Users Only</SelectItem>
+                        <SelectItem value="PENDING_USERS">Pending Setup Users Only</SelectItem>
+                        <SelectItem value="INCOMPLETE_USERS">Incomplete Account Users</SelectItem>
+                        <SelectItem value="SUSPENDED_USERS">Suspended Users Only</SelectItem>
                         <SelectItem value="SPECIFIC_USERS">Specific Selected Users</SelectItem>
                       </SelectContent>
                     </Select>

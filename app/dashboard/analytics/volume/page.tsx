@@ -4,12 +4,16 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { useQuery } from "@tanstack/react-query";
-import { getVolumeAnalytics, downloadVolumeReportPdf, AdminAnalyticsWindow } from "@/lib/analyticsService";
+import { getVolumeAnalytics, downloadVolumeReportPdf, AdminAnalyticsWindow, getTopUsersByTransactionCount } from "@/lib/analyticsService";
 import { AnalyticsDateFilter } from "@/components/analytics/AnalyticsDateFilter";
 import { format, subDays } from "date-fns";
 import { StatCard } from "@/components/ui/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -17,7 +21,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import {
-  TrendingUp, ArrowDownRight, ArrowUpRight, ArrowLeftRight, Download, Calendar, Activity, AlertTriangle, ShieldCheck
+  TrendingUp, ArrowDownRight, ArrowUpRight, ArrowLeftRight, Download, Calendar, Activity, AlertTriangle, ShieldCheck, ShieldAlert, Eye
 } from "lucide-react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -30,11 +34,25 @@ export default function VolumeAnalyticsPage() {
   const [activeRange, setActiveRange] = useState<number | null>(30);
   const [isExporting, setIsExporting] = useState(false);
 
+  const [topUsersSort, setTopUsersSort] = useState<"desc" | "asc">("desc");
+  const [topUsersPage, setTopUsersPage] = useState(1);
+
   const queryParam = activeRange !== null ? { window } : { startDate, endDate };
 
   const { data, isLoading } = useQuery({
     queryKey: ["analytics-volume", activeRange !== null ? window : `${startDate}_${endDate}`],
     queryFn: () => getVolumeAnalytics(queryParam),
+  });
+
+  const { data: topUsersData, isLoading: isTopUsersLoading } = useQuery({
+    queryKey: ["top-users-transactions", activeRange !== null ? window : `${startDate}_${endDate}`, topUsersSort, topUsersPage],
+    queryFn: () =>
+      getTopUsersByTransactionCount({
+        ...queryParam,
+        sort: topUsersSort,
+        page: topUsersPage,
+        limit: 15,
+      }),
   });
 
   const handleWindowChange = (w: AdminAnalyticsWindow, days: number) => {
@@ -273,6 +291,147 @@ export default function VolumeAnalyticsPage() {
           </div>
         </div>
 
+      </div>
+
+      {/* ── User Transaction Leaderboard & Suspicious Activity Monitoring ──────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100 shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                User Transaction Activity & Suspicious Monitoring
+              </h2>
+              <p className="text-xs text-gray-500">
+                Track and filter user transaction counts in the selected date range to detect outliers and suspicious activity.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-gray-500">Sort by count:</span>
+            <Select value={topUsersSort} onValueChange={(v) => { setTopUsersSort(v as "desc" | "asc"); setTopUsersPage(1); }}>
+              <SelectTrigger className="w-[180px] h-9 bg-white border-gray-200 text-xs font-semibold shadow-none">
+                <SelectValue placeholder="Sort order" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desc">Highest to Lowest</SelectItem>
+                <SelectItem value="asc">Lowest to Highest</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent bg-gray-50/80 border-b-gray-100/80">
+                <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide w-12">Rank</TableHead>
+                <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide">User Details</TableHead>
+                <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide text-right">Tx Count</TableHead>
+                <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide text-right">Total Volume</TableHead>
+                <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide text-right">Avg Tx Size</TableHead>
+                <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide text-center">Status / Flag</TableHead>
+                <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isTopUsersLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-6" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-20 mx-auto rounded-full" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-16 ml-auto rounded-lg" /></TableCell>
+                  </TableRow>
+                ))
+              ) : (topUsersData?.data?.length ?? 0) === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-gray-400 py-12 text-sm">
+                    No transactions recorded for any user in this date range.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                topUsersData?.data?.map((u, idx) => {
+                  const rank = (topUsersPage - 1) * 15 + idx + 1;
+                  const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || `User #${u.userId}`;
+                  return (
+                    <TableRow key={u.userId} className={cn("hover:bg-gray-50/70 transition-colors", u.isSuspiciousFlag && "bg-amber-50/40 hover:bg-amber-50/60")}>
+                      <TableCell className="font-mono text-xs font-bold text-gray-500">#{rank}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-900 text-sm leading-snug">{name}</span>
+                          <span className="text-xs text-gray-400 font-mono">{u.email || "No email"} {u.phoneNumber ? `• ${u.phoneNumber}` : ""}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="font-mono font-bold text-sm text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">
+                          {u.transactionCount.toLocaleString()}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-gray-900 text-xs">
+                        ₦{u.totalVolumeInNaira.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs text-gray-600">
+                        ₦{u.avgTxSizeInNaira.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {u.isSuspiciousFlag ? (
+                          <Badge variant="outline" className="bg-amber-100/80 text-amber-800 border-amber-300 font-bold text-[10px] uppercase tracking-wider animate-pulse inline-flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-amber-600" /> High Activity
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-medium uppercase tracking-wider">
+                            Normal
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link href={`/dashboard/users/${u.userId}`}>
+                          <Button size="sm" variant="ghost" className="h-8 px-2.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 gap-1 font-medium">
+                            <Eye className="w-3.5 h-3.5" /> Inspect
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Pagination footer */}
+        {topUsersData?.meta && topUsersData.meta.totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-gray-100 pt-4 text-xs text-gray-500">
+            <span>Showing page {topUsersData.meta.page} of {topUsersData.meta.totalPages} ({topUsersData.meta.total} active users in period)</span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs px-3 border-gray-200"
+                disabled={topUsersPage <= 1}
+                onClick={() => setTopUsersPage((p) => p - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs px-3 border-gray-200"
+                disabled={topUsersPage >= topUsersData.meta.totalPages}
+                onClick={() => setTopUsersPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

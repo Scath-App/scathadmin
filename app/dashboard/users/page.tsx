@@ -208,9 +208,9 @@ export default function UsersPage() {
   // ── Communicate modal state
   const [isCommunicateOpen, setIsCommunicateOpen] = useState(false);
   const [communicateTarget, setCommunicateTarget] = useState<{
-    target: "ALL_USERS" | "SPECIFIC_USERS";
+    target: "ALL_USERS" | "ACTIVE_USERS" | "PENDING_USERS" | "INCOMPLETE_USERS" | "SUSPENDED_USERS" | "SPECIFIC_USERS";
     preselectedUsers?: Array<{ id: number; email: string; firstName?: string; lastName?: string }>;
-  }>({ target: "ALL_USERS" });
+  }>({ target: "ACTIVE_USERS" });
 
   // ── Deleted users state
   const [deletedPage, setDeletedPage] = useState(0);
@@ -574,7 +574,7 @@ export default function UsersPage() {
               variant="outline"
               className="border-gray-200 text-gray-700 hover:bg-gray-50 gap-2 shadow-sm"
               onClick={() => {
-                setCommunicateTarget({ target: "ALL_USERS" });
+                setCommunicateTarget({ target: "ACTIVE_USERS" });
                 setIsCommunicateOpen(true);
               }}
             >

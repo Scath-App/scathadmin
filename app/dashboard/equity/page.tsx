@@ -219,12 +219,14 @@ export default function EquityListingsPage() {
       header: "Total Shares",
       className: "font-mono text-sm text-right",
       headerClassName: "text-right",
+      render: (v) => v != null ? Number(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : "—",
     },
     {
       key: "availableShares",
       header: "Available",
       className: "font-mono text-sm text-right",
       headerClassName: "text-right",
+      render: (v) => v != null ? Number(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : "—",
     },
     {
       key: "lockInPeriod",
