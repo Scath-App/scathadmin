@@ -450,11 +450,18 @@ export default function UsersPage() {
             lastName={row.lastName}
             email={row.email}
           />
-          <span className="font-medium text-gray-900 text-sm">
-            {row.firstName && row.lastName
-              ? `${row.firstName} ${row.lastName}`
-              : "—"}
-          </span>
+          <div className="flex flex-col min-w-0">
+            <span className="font-medium text-gray-900 text-sm">
+              {row.firstName && row.lastName
+                ? `${row.firstName} ${row.lastName}`
+                : "—"}
+            </span>
+            {row.phoneNumber && (
+              <span className="text-xs text-fgray font-normal">
+                {row.phoneNumber}
+              </span>
+            )}
+          </div>
         </div>
       ),
     },
@@ -817,9 +824,16 @@ export default function UsersPage() {
                             lastName={u.lastName}
                             email={u.email}
                           />
-                          <span className="font-medium text-gray-900 text-sm truncate">
-                            {name}
-                          </span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-medium text-gray-900 text-sm truncate">
+                              {name}
+                            </span>
+                            {u.phoneNumber && (
+                              <span className="text-xs text-fgray font-normal truncate">
+                                {u.phoneNumber}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Email */}

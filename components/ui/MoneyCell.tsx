@@ -7,6 +7,14 @@ export function nairaToKobo(naira: number | string | null | undefined): number {
   return Math.round(n * 100);
 }
 
+/** Convert a kobo value (integer) to a naira number for form fields */
+export function koboToNaira(kobo: number | string | null | undefined): number {
+  if (kobo == null || kobo === "") return 0;
+  const k = Number(kobo);
+  if (isNaN(k)) return 0;
+  return k / 100;
+}
+
 /** Format an amount in kobo to a naira string: ₦1,234.56 */
 export function formatNaira(kobo: number | null | undefined): string {
   if (kobo == null || isNaN(kobo)) return "₦0.00";

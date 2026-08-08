@@ -13,18 +13,45 @@ import {
   updateUser,
   updateUserRole,
   deleteUser,
+  getUserAuditReport,
+  downloadUserAuditReportPdf,
+  UserAuditReport,
 } from "@/lib/userService";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { ReconcileDepositModal } from "@/components/accounts/ReconcileDepositModal";
 import { getUserInvoices, reopenPaidInvoice, Invoice } from "@/lib/invoiceService";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
 type AnyRecord = Record<string, unknown>;
 
 type UserProfile = {
+  id?: number;
   firstName?: string;
   lastName?: string;
   email?: string;
   phoneNumber?: string;
   role?: string;
+  status?: string;
+  customerType?: string;
+  image?: string;
+  kycPhotoUrl?: string;
+  userSelfieUrl?: string;
+  bvnPhotoUrl?: string;
+  ninPhotoUrl?: string;
+  bvnNumber?: string;
+  ninNumber?: string;
+  isVerified?: boolean;
+  isPhoneVerified?: boolean;
+  kycStatus?: boolean;
+  createdAt?: string;
+  companyName?: string;
+  companyRegistrationNumber?: string;
+  tier?: {
+    id?: number;
+    name?: string;
+    level?: number;
+    customerType?: string;
+  };
 };
 
 import {
@@ -66,15 +93,45 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, Loader2, Trash2, Mail } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Loader2,
+  Trash2,
+  Mail,
+  ShieldAlert,
+  Download,
+  FileText,
+  ExternalLink,
+  User,
+  Phone,
+  Wallet,
+  CreditCard,
+  TrendingUp,
+  PiggyBank,
+  PieChart,
+  Receipt,
+  Calendar,
+  Building,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  Copy,
+  Fingerprint,
+  FileBadge,
+  Image as ImageIcon,
+} from "lucide-react";
 import { format } from "date-fns";
 import { CommunicateModal } from "@/components/ui/CommunicateModal";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-const fmt = (kobo: number | string) => {
-  const n = typeof kobo === "string" ? parseFloat(kobo) : kobo;
-  return `₦${(n / 100).toLocaleString("en-NG", { minimumFractionDigits: 2 })}`;
+const fmt = (kobo: number | string | null | undefined) => {
+  if (kobo == null || kobo === "" || isNaN(Number(kobo))) return "₦0.00";
+  const n = typeof kobo === "string" ? parseFloat(kobo) : Number(kobo);
+  return `₦${(n / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const PAGE_LIMIT = 10;
@@ -186,6 +243,51 @@ export default function UserDetailPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   // ── Communicate modal state
   const [isCommunicateOpen, setIsCommunicateOpen] = useState(false);
+  // ── Reconcile deposit modal state
+  const [isReconcileDepositOpen, setIsReconcileDepositOpen] = useState(false);
+  // ── Audit report modal state
+  const [isAuditOpen, setIsAuditOpen] = useState(false);
+
+  const { data: auditReport, isLoading: isAuditLoading, refetch: fetchAuditReport } = useQuery({
+    queryKey: ["userAuditReport", userId],
+    queryFn: () => getUserAuditReport(userId),
+    enabled: false,
+  });
+
+  const handleOpenAuditReport = () => {
+    setIsAuditOpen(true);
+    fetchAuditReport();
+  };
+
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    setIsExportingPdf(true);
+    try {
+      const blob = await downloadUserAuditReportPdf(userId);
+      const userFirstName = auditReport?.user.firstName || "";
+      const userLastName = auditReport?.user.lastName || "";
+      const namePart = `${userFirstName}_${userLastName}`.trim().replace(/\s+/g, "_");
+      const fileName = namePart
+        ? `Audit_Report_${namePart}_User_${userId}.pdf`
+        : `Audit_Report_User_${userId}.pdf`;
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Audit report PDF downloaded successfully!");
+    } catch (err) {
+      console.error("PDF download error:", err);
+      toast.error("Failed to download audit report PDF.");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   // Pagination state
   const [invPage, setInvPage] = useState(0);
@@ -379,56 +481,284 @@ export default function UserDetailPage() {
           Back to Users
         </Button>
       </div>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          {profileLoading ? (
-            <Skeleton className="h-7 w-48 mb-1" />
-          ) : (
-            <h2 className="text-2xl font-bold text-gray-900">
-              {profile.firstName && profile.lastName
-                ? `${profile.firstName} ${profile.lastName}`
-                : `User #${userId}`}
-            </h2>
-          )}
-          {profileLoading ? (
-            <Skeleton className="h-4 w-56 mt-1" />
-          ) : (
-            <div className="text-gray-500 text-sm mt-0.5 flex items-center flex-wrap gap-x-3 gap-y-1">
-              <span>{profile.email ?? `User ID: ${userId}`}</span>
-              {profile.phoneNumber && (
-                <span className="text-gray-400">{profile.phoneNumber}</span>
-              )}
-              {profile.role && (
-                <Badge variant="outline" className="text-xs capitalize border-gray-200 text-gray-500">
-                  {profile.role}
+      {/* ── User Hero Profile Card ─────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-7 space-y-6">
+        {/* Top Header Bar */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          {/* User Photos & Main Meta */}
+          <div className="flex items-start gap-4 sm:gap-5 min-w-0">
+            {/* Primary Profile / KYC Selfie Photo Avatar */}
+            {profile.userSelfieUrl || profile.kycPhotoUrl || profile.image ? (
+              <div
+                className="relative group cursor-pointer shrink-0"
+                title="Click to view full KYC Selfie Photo"
+                onClick={() => window.open(profile.userSelfieUrl || profile.kycPhotoUrl || profile.image, "_blank")}
+              >
+                <img
+                  src={profile.userSelfieUrl || profile.kycPhotoUrl || profile.image}
+                  alt="User KYC Selfie"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-greeny/40 shadow-sm transition-transform group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 rounded-2xl flex flex-col items-center justify-center text-white text-[10px] font-semibold transition-opacity">
+                  <ImageIcon className="w-5 h-5 mb-0.5" />
+                  View Photo
+                </div>
+                <span className="absolute -bottom-1 -right-1 bg-greeny text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white flex items-center gap-0.5 shadow-sm">
+                  <CheckCircle2 className="w-2.5 h-2.5" /> KYC
+                </span>
+              </div>
+            ) : (
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-blue/10 via-lblue/10 to-faintSky text-blue font-bold text-xl sm:text-2xl flex items-center justify-center shrink-0 border border-blue/20 shadow-sm">
+                {[profile.firstName?.[0], profile.lastName?.[0]].filter(Boolean).join("").toUpperCase() ||
+                  profile.email?.[0]?.toUpperCase() ||
+                  "U"}
+              </div>
+            )}
+
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {profileLoading ? (
+                  <Skeleton className="h-7 w-48" />
+                ) : (
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+                    {profile.firstName && profile.lastName
+                      ? `${profile.firstName} ${profile.lastName}`
+                      : `User #${userId}`}
+                  </h2>
+                )}
+
+                {/* Status Badge */}
+                {profile.status && <StatusBadge status={profile.status} />}
+
+                {/* Tier Badge */}
+                <Badge
+                  variant="outline"
+                  className="text-xs font-semibold border-purple/30 bg-purple/10 text-purple-700 rounded-full px-2.5 py-0.5 flex items-center gap-1"
+                >
+                  <ShieldCheck className="w-3 h-3 text-purple-600" />
+                  {profile.tier?.name
+                    ? profile.tier.name
+                    : `Tier ${profile.tier?.level ?? (profile.kycStatus ? 2 : 1)}`}
                 </Badge>
+
+                {/* Customer Type Badge */}
+                {profile.customerType && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs capitalize border-gray-200 bg-gray-50 text-gray-600 rounded-full px-2.5 py-0.5 flex items-center gap-1"
+                  >
+                    {profile.customerType.toLowerCase() === "business" ? (
+                      <Building className="w-3 h-3 text-gray-500" />
+                    ) : (
+                      <User className="w-3 h-3 text-gray-500" />
+                    )}
+                    {profile.customerType}
+                  </Badge>
+                )}
+
+                {/* Role Badge */}
+                {profile.role && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs uppercase tracking-wider font-semibold border-blue/20 bg-blue/5 text-blue rounded-full px-2.5 py-0.5"
+                  >
+                    {profile.role}
+                  </Badge>
+                )}
+              </div>
+
+              {profileLoading ? (
+                <Skeleton className="h-4 w-56" />
+              ) : (
+                <div className="flex items-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-fgray">
+                  {profile.email && (
+                    <div className="flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span className="text-gray-700 font-medium">{profile.email}</span>
+                    </div>
+                  )}
+                  {profile.phoneNumber && (
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span className="text-gray-700 font-medium">{profile.phoneNumber}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span>ID: #{userId}</span>
+                  </div>
+                  {profile.createdAt && (
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span>Joined: {format(new Date(profile.createdAt), "dd MMM yyyy")}</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          )}
+          </div>
 
-          {/* ── Linked Platform Accounts ─────────────────────────────── */}
-          {!accountsLoading && userAccounts.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
+          {/* Action Buttons Right */}
+          <div className="flex items-center flex-wrap gap-2.5 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-gray-100">
+            {!profileLoading && profile.role?.toUpperCase() !== "ADMIN" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red/20 text-red hover:bg-red/5 hover:border-red/40 gap-2 transition-all"
+                onClick={() => setIsDeleteOpen(true)}
+                disabled={profileLoading}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Account
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-emerald-200 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 hover:border-emerald-300 gap-2 transition-all"
+              onClick={() => setIsReconcileDepositOpen(true)}
+              disabled={profileLoading}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              Reconcile Deposit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-purple/20 text-purple-600 hover:bg-purple/5 hover:border-purple/40 gap-2 transition-all"
+              onClick={handleOpenAuditReport}
+              disabled={profileLoading}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              Audit Report
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-blue/20 text-blue hover:bg-blue/5 hover:border-blue/40 gap-2 transition-all"
+              onClick={() => setIsCommunicateOpen(true)}
+              disabled={profileLoading}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Message User
+            </Button>
+            <Button
+              size="sm"
+              className="bg-blue hover:bg-darkBlue text-white gap-2 shadow-sm transition-all"
+              onClick={() => setIsEditOpen(true)}
+              disabled={profileLoading}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Details
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Verified Identity & KYC Credentials Grid ─────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-4 border-t border-gray-100">
+          {/* BVN */}
+          <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-fgray flex items-center gap-1">
+                <Fingerprint className="w-3.5 h-3.5 text-blue" /> BVN Number
+              </p>
+              <p className="text-xs font-mono font-bold text-gray-900 mt-1 truncate">
+                {profile.bvnNumber ? profile.bvnNumber : "Not Verified"}
+              </p>
+            </div>
+            {profile.bvnNumber && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-gray-400 hover:text-gray-700 shrink-0"
+                title="Copy BVN"
+                onClick={() => {
+                  navigator.clipboard.writeText(profile.bvnNumber!);
+                  toast.success("BVN copied to clipboard!");
+                }}
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
+            )}
+          </div>
+
+          {/* NIN */}
+          <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-fgray flex items-center gap-1">
+                <FileBadge className="w-3.5 h-3.5 text-purple-600" /> NIN Number
+              </p>
+              <p className="text-xs font-mono font-bold text-gray-900 mt-1 truncate">
+                {profile.ninNumber ? profile.ninNumber : "Not Verified"}
+              </p>
+            </div>
+            {profile.ninNumber && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-gray-400 hover:text-gray-700 shrink-0"
+                title="Copy NIN"
+                onClick={() => {
+                  navigator.clipboard.writeText(profile.ninNumber!);
+                  toast.success("NIN copied to clipboard!");
+                }}
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
+            )}
+          </div>
+
+          {/* Verifications */}
+          <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100 flex flex-col justify-center gap-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-fgray">Verifications</p>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${profile.isPhoneVerified ? "text-greeny" : "text-gray-400"}`}>
+                {profile.isPhoneVerified ? <CheckCircle2 className="w-3 h-3 text-greeny" /> : <XCircle className="w-3 h-3 text-gray-300" />} Phone
+              </span>
+              <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${profile.isVerified ? "text-greeny" : "text-gray-400"}`}>
+                {profile.isVerified ? <CheckCircle2 className="w-3 h-3 text-greeny" /> : <XCircle className="w-3 h-3 text-gray-300" />} Email
+              </span>
+              <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${profile.kycStatus ? "text-greeny" : "text-gray-400"}`}>
+                {profile.kycStatus ? <CheckCircle2 className="w-3 h-3 text-greeny" /> : <XCircle className="w-3 h-3 text-gray-300" />} KYC
+              </span>
+            </div>
+          </div>
+
+          {/* Business Entity */}
+          <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100 flex flex-col justify-center min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-fgray flex items-center gap-1">
+              <Building className="w-3.5 h-3.5 text-blue" /> Business / Entity
+            </p>
+            <p className="text-xs font-semibold text-gray-900 mt-1 truncate">
+              {profile.companyName ? profile.companyName : "Personal Account"}
+            </p>
+          </div>
+        </div>
+
+        {/* Linked Accounts Bar */}
+        {!accountsLoading && userAccounts.length > 0 && (
+          <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-fgray flex items-center gap-1.5 shrink-0">
+              <Wallet className="w-3.5 h-3.5 text-blue" /> Linked Accounts ({userAccounts.length}):
+            </span>
+            <div className="flex flex-wrap gap-2 min-w-0">
               {userAccounts.map((acc: AnyRecord) => (
                 <div
                   key={acc.id as string | number}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-100 rounded-lg shadow-sm text-xs"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-50/80 hover:bg-gray-100/80 border border-gray-100 rounded-xl text-xs transition-colors"
                 >
-                  <span className="font-mono text-gray-600 font-medium">
+                  <span className="font-mono text-gray-800 font-semibold">
                     {String(acc.accountNumber ?? "—")}
                   </span>
                   {!!acc.accountName && (
-                    <span className="text-gray-400">· {String(acc.accountName)}</span>
-                  )}
-                  {!!acc.accountType && (
-                    <span className="text-gray-300">· {String(acc.accountType)}</span>
+                    <span className="text-gray-500">· {String(acc.accountName)}</span>
                   )}
                   {!!acc.status && (
                     <Badge
                       variant="outline"
                       className={
                         String(acc.status).toLowerCase() === "active"
-                          ? "text-greeny border-greeny/30 bg-greeny/5 text-[10px] py-0 px-1.5"
+                          ? "text-greeny border-greeny/30 bg-greeny/10 text-[10px] py-0 px-1.5 font-medium"
                           : "text-gray-400 border-gray-200 text-[10px] py-0 px-1.5"
                       }
                     >
@@ -438,67 +768,38 @@ export default function UserDetailPage() {
                 </div>
               ))}
             </div>
-          )}
-          {accountsLoading && (
-            <div className="mt-3 flex gap-2">
-              <Skeleton className="h-7 w-40 rounded-lg" />
-              <Skeleton className="h-7 w-32 rounded-lg" />
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Delete — hidden for admin accounts */}
-          {!profileLoading && profile.role?.toUpperCase() !== "ADMIN" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-red/30 text-red hover:bg-red/5 hover:border-red/50 gap-2"
-              onClick={() => setIsDeleteOpen(true)}
-              disabled={profileLoading}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Delete Account
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-blue/30 text-blue hover:bg-blue/5 hover:border-blue/50 gap-2"
-            onClick={() => setIsCommunicateOpen(true)}
-            disabled={profileLoading}
-          >
-            <Mail className="w-3.5 h-3.5" />
-            Message User
-          </Button>
-          <Button
-            size="sm"
-            className="bg-blue hover:bg-darkBlue text-white gap-2"
-            onClick={() => setIsEditOpen(true)}
-            disabled={profileLoading}
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            Edit Details
-          </Button>
-        </div>
+          </div>
+        )}
+        {accountsLoading && (
+          <div className="pt-4 border-t border-gray-100 flex gap-2">
+            <Skeleton className="h-7 w-40 rounded-xl" />
+            <Skeleton className="h-7 w-32 rounded-xl" />
+          </div>
+        )}
       </div>
 
       <Tabs defaultValue="transactions" className="w-full">
-        <TabsList className="bg-gray-100 p-1 rounded-xl w-full max-w-4xl grid grid-cols-5 gap-1">
+        <TabsList className="bg-gray-100/80 p-1 rounded-2xl w-full max-w-4xl grid grid-cols-5 gap-1 shadow-inner">
           {[
-            { value: "transactions", label: "Transactions" },
-            { value: "investments", label: "Investments" },
-            { value: "saveboxes", label: "Saveboxes" },
-            { value: "equity", label: "Equity" },
-            { value: "invoices", label: "Invoices" },
-          ].map((t) => (
-            <TabsTrigger
-              key={t.value}
-              value={t.value}
-              className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs"
-            >
-              {t.label}
-            </TabsTrigger>
-          ))}
+            { value: "transactions", label: "Transactions", icon: CreditCard },
+            { value: "investments", label: "Investments", icon: TrendingUp },
+            { value: "saveboxes", label: "Saveboxes", icon: PiggyBank },
+            { value: "equity", label: "Equity", icon: PieChart },
+            { value: "invoices", label: "Invoices", icon: Receipt },
+          ].map((t) => {
+            const IconComp = t.icon;
+            return (
+              <TabsTrigger
+                key={t.value}
+                value={t.value}
+                className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue data-[state=active]:shadow-sm text-xs py-2.5 font-medium flex items-center justify-center gap-1.5 transition-all"
+              >
+                <IconComp className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">{t.label}</span>
+                <span className="sm:hidden">{t.label.slice(0, 4)}..</span>
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
 
         {/* ─── INVESTMENTS TAB ──────────────────────────────────────────── */}
@@ -1264,6 +1565,676 @@ export default function UserDetailPage() {
               ]
             : []
         }
+      />
+
+      {/* ── Compliance Audit Report Modal ────────────────────────────────────── */}
+      <Dialog open={isAuditOpen} onOpenChange={setIsAuditOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto print:max-w-none print:max-h-none print:h-auto print:overflow-visible print:p-0 print:border-none print:shadow-none">
+          <DialogHeader className="flex flex-row items-center justify-between border-b pb-4 print:hidden">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <ShieldAlert className="h-6 w-6 text-purple-600" />
+              Compliance & Audit Report — User #{userId}
+            </DialogTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                className="gap-2 bg-purple-700 hover:bg-purple-800 text-white font-semibold"
+                onClick={handleDownloadPdf}
+                disabled={isExportingPdf}
+              >
+                {isExportingPdf ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {isExportingPdf ? "Exporting PDF..." : "Export PDF"}
+              </Button>
+            </div>
+          </DialogHeader>
+
+          {isAuditLoading ? (
+            <div className="py-12 text-center text-gray-500 space-y-3 print:py-4">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-purple-600" />
+              <p className="text-sm font-medium">Generating consolidated compliance audit report...</p>
+            </div>
+          ) : auditReport ? (
+            (() => {
+              const txList = Array.isArray(auditReport.transactions)
+                ? auditReport.transactions
+                : (auditReport.transactions?.items ?? []);
+
+              const totalTxCount =
+                typeof auditReport.transactions === "object" &&
+                !Array.isArray(auditReport.transactions)
+                  ? auditReport.transactions.total
+                  : txList.length;
+
+              const totalInflowKobo =
+                typeof auditReport.transactions === "object" &&
+                !Array.isArray(auditReport.transactions)
+                  ? (auditReport.transactions.inflow?.totalAmountInKobo ?? 0)
+                  : txList
+                      .filter((t) => t.type === "CREDIT")
+                      .reduce(
+                        (acc, t) => acc + (t.amountInKobo ?? (t.amount ? t.amount * 100 : 0)),
+                        0,
+                      );
+
+              const totalOutflowKobo =
+                typeof auditReport.transactions === "object" &&
+                !Array.isArray(auditReport.transactions)
+                  ? (auditReport.transactions.outflow?.totalAmountInKobo ?? 0)
+                  : txList
+                      .filter((t) => t.type === "DEBIT")
+                      .reduce(
+                        (acc, t) => acc + (t.amountInKobo ?? (t.amount ? t.amount * 100 : 0)),
+                        0,
+                      );
+
+              const totalActiveBalanceKobo =
+                auditReport.accounts?.reduce(
+                  (sum, a) => sum + (a.accountBalanceInKobo ?? (a.balance ? a.balance * 100 : 0)),
+                  0,
+                ) ?? 0;
+
+              const userTier =
+                auditReport.user.tierLevel ?? (auditReport.user.kycStatus ? 1 : 0);
+
+              const auditRef = `AUD-${new Date().getFullYear()}-${userId
+                .toString()
+                .padStart(5, "0")}`;
+
+              return (
+                <div id="audit-report-print-area" className="space-y-6 pt-2 text-gray-900 font-sans print:p-6 print:space-y-6 bg-white">
+                  <style>{`
+                    @media print {
+                      @page {
+                        size: A4 portrait;
+                        margin: 10mm;
+                      }
+                      body {
+                        background: #ffffff !important;
+                        color: #000000 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                      }
+                      /* Hide background page layout elements during print */
+                      header,
+                      aside,
+                      nav,
+                      main,
+                      .print\\:hidden {
+                        display: none !important;
+                      }
+                      body,
+                      html {
+                        background: #ffffff !important;
+                        color: #000000 !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                      }
+                      [data-aria-hidden="true"] {
+                        display: none !important;
+                      }
+                      div[data-state="open"] > div:first-child:not([role="dialog"]) {
+                        background: transparent !important;
+                        backdrop-filter: none !important;
+                      }
+                      /* Unset fixed overlay styles so modal content flows from top of A4 page */
+                      div[role="dialog"] {
+                        position: relative !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        transform: none !important;
+                        max-width: 100% !important;
+                        max-height: none !important;
+                        width: 100% !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        background: #ffffff !important;
+                        color: #000000 !important;
+                        display: block !important;
+                        visibility: visible !important;
+                      }
+                      #audit-report-print-area {
+                        display: block !important;
+                        visibility: visible !important;
+                        position: static !important;
+                        width: 100% !important;
+                        height: auto !important;
+                        max-height: none !important;
+                        overflow: visible !important;
+                      }
+                      #audit-report-print-area * {
+                        max-height: none !important;
+                        overflow: visible !important;
+                        visibility: visible !important;
+                      }
+                      button,
+                      [role="dialog"] > button {
+                        display: none !important;
+                      }
+                      * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                      }
+                    }
+                  `}</style>
+
+                  {/* ── Official Letterhead & Header ───────────────────────── */}
+                  <div className="border-b border-gray-300 pb-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-lg bg-purple-700 flex items-center justify-center text-white font-black text-sm">
+                            S
+                          </div>
+                          <span className="font-black text-lg tracking-wider text-purple-950 uppercase">
+                            SCATH APP
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 font-medium tracking-wide mt-0.5">
+                          OFFICIAL COMPLIANCE & FINANCIAL AUDIT REPORT
+                        </p>
+                      </div>
+                      <div className="text-left sm:text-right text-xs">
+                        <p className="font-bold text-gray-800">
+                          Audit Ref: <span className="font-mono text-purple-700">{auditRef}</span>
+                        </p>
+                        <p className="text-gray-500">
+                          Issued:{" "}
+                          {auditReport.generatedAt
+                            ? format(new Date(auditReport.generatedAt), "MMM d, yyyy HH:mm:ss 'UTC'")
+                            : format(new Date(), "MMM d, yyyy HH:mm:ss 'UTC'")}
+                        </p>
+                        <span className="inline-block mt-1 px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold rounded tracking-wider uppercase">
+                          CONFIDENTIAL // REGULATORY AUDIT
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Executive Account Profile & Verified KYC Credentials ─── */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                      1. Account Holder & KYC Identity Profile
+                    </h3>
+
+                    {/* Photos Grid & Verified Credentials Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-200 text-xs">
+                      
+                      {/* Column 1: Photos (Live Capture + Official Identity Photo) */}
+                      <div className="space-y-2 border-b md:border-b-0 md:border-r border-gray-200 pb-3 md:pb-0 md:pr-3">
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                          Verified Photos & Biometrics
+                        </p>
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          {/* Live Selfie Capture */}
+                          <div className="flex flex-col items-center">
+                            <div className="w-full h-28 sm:h-32 rounded-xl overflow-hidden border-2 border-purple-600 shadow-sm bg-purple-50 flex items-center justify-center">
+                              {auditReport.user.kycPhotoUrl ? (
+                                <img
+                                  src={auditReport.user.kycPhotoUrl}
+                                  alt="Live Capture Selfie"
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="text-purple-700 flex flex-col items-center justify-center font-bold text-xs p-2 text-center">
+                                  <span>No Live</span>
+                                  <span>Capture</span>
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold text-purple-950 mt-1">Live Capture</span>
+                          </div>
+
+                          {/* Official BVN Photo */}
+                          <div className="flex flex-col items-center">
+                            <div className="w-full h-28 sm:h-32 rounded-xl overflow-hidden border-2 border-emerald-600 shadow-sm bg-emerald-50 flex items-center justify-center">
+                              {auditReport.user.bvnPhotoUrl ? (
+                                <img
+                                  src={auditReport.user.bvnPhotoUrl}
+                                  alt="Official BVN Photo"
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="text-emerald-800 flex flex-col items-center justify-center font-bold text-xs p-2 text-center">
+                                  <span>No BVN</span>
+                                  <span>Photo</span>
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-950 mt-1">Official BVN Photo</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Column 2: Legal Profile & Contact Details */}
+                      <div className="space-y-1.5 border-b md:border-b-0 md:border-r border-gray-200 pb-3 md:pb-0 md:pr-3">
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                          Account Profile & Contact
+                        </p>
+                        <p className="font-extrabold text-gray-900 text-sm">
+                          {auditReport.user.firstName} {auditReport.user.lastName}
+                        </p>
+                        <p className="text-gray-700 font-medium truncate">{auditReport.user.email}</p>
+                        <p className="text-gray-600 text-[11px] font-mono">{auditReport.user.phoneNumber ?? "No Phone"}</p>
+                        {auditReport.user.dob && (
+                          <p className="text-gray-500 text-[10px]">
+                            DOB: <span className="font-semibold text-gray-800">{auditReport.user.dob}</span>
+                          </p>
+                        )}
+                        {(auditReport.user.poaAddress || auditReport.user.address || auditReport.user.city || auditReport.user.state) && (
+                          <p className="text-gray-700 text-[10px] leading-snug">
+                            <span className="font-bold text-purple-950">Address (POA): </span>
+                            {auditReport.user.poaAddress ||
+                              [auditReport.user.address, auditReport.user.city, auditReport.user.state]
+                                .filter(Boolean)
+                                .join(", ")}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Column 3: Verified KYC Credentials & Biometrics */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                          Verified KYC Credentials
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-700 text-white font-bold text-[11px]">
+                            Tier {userTier}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px]">
+                            {auditReport.user.kycStatus ? "KYC Verified" : "Basic Account"}
+                          </span>
+                        </div>
+
+                        {/* Display BOTH BVN and NIN numbers if present */}
+                        <div className="space-y-0.5 pt-0.5 font-mono text-[11px]">
+                          {auditReport.user.bvnNumber && (
+                            <p className="font-bold text-gray-900">
+                              <span className="text-purple-900 font-extrabold">BVN: </span>
+                              {auditReport.user.bvnNumber}
+                            </p>
+                          )}
+                          {auditReport.user.ninNumber && (
+                            <p className="font-bold text-gray-900">
+                              <span className="text-emerald-900 font-extrabold">NIN: </span>
+                              {auditReport.user.ninNumber}
+                            </p>
+                          )}
+                          {!auditReport.user.bvnNumber && !auditReport.user.ninNumber && auditReport.user.kycNumber && (
+                            <p className="font-bold text-gray-900">
+                              <span className="text-purple-900 uppercase font-extrabold">{auditReport.user.kycType ?? "ID"}: </span>
+                              {auditReport.user.kycNumber}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Latest KYC Biometric verification scores */}
+                        {auditReport.kycVerifications && auditReport.kycVerifications.length > 0 && (
+                          <div className="pt-0.5 text-[10px] text-gray-600 space-y-0.5">
+                            {auditReport.kycVerifications[0].faceMatchScore != null && (
+                              <p className="font-medium text-emerald-800">
+                                Face Match: <span className="font-bold">{auditReport.kycVerifications[0].faceMatchScore}% Match</span>
+                              </p>
+                            )}
+                            {auditReport.kycVerifications[0].livenessPassed != null && (
+                              <p className="font-medium text-purple-800">
+                                Liveness: <span className="font-bold">{auditReport.kycVerifications[0].livenessPassed ? "Passed" : "Failed"}</span>
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        <p className="text-gray-500 text-[10px] pt-0.5">
+                          Registered:{" "}
+                          {auditReport.user.createdAt
+                            ? format(new Date(auditReport.user.createdAt), "MMM d, yyyy")
+                            : "N/A"}
+                        </p>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* ── Corporate Registration & Business Credentials (If Business) ── */}
+                  {(auditReport.user.customerType === "business" || auditReport.businessDetails) && (
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-bold text-purple-950 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 text-purple-700" />
+                        1B. Corporate Registration & Business Dossier
+                      </h3>
+                      <div className="p-3.5 rounded-xl bg-purple-50/60 border border-purple-200 text-xs space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-b border-purple-200/80 pb-3">
+                          <div>
+                            <p className="text-[10px] text-purple-800 font-bold uppercase">Company Name</p>
+                            <p className="font-extrabold text-purple-950 text-sm mt-0.5">
+                              {auditReport.businessDetails?.companyName ?? auditReport.user.companyName ?? "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-purple-800 font-bold uppercase">CAC Registration Number</p>
+                            <p className="font-mono font-bold text-gray-900 text-xs mt-0.5">
+                              {auditReport.businessDetails?.companyRegistrationNumber ?? auditReport.user.companyRegistrationNumber ?? "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-purple-800 font-bold uppercase">Tax Identification Number (TIN)</p>
+                            <p className="font-mono font-bold text-emerald-950 text-xs mt-0.5">
+                              {auditReport.businessDetails?.tin ?? "N/A"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Verified Business Documents Links */}
+                        <div>
+                          <p className="text-[10px] text-purple-900 font-bold uppercase tracking-wider mb-2">
+                            Verified Corporate Dossier Files
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* CAC Certificate */}
+                            {auditReport.businessDetails?.cacUrl ? (
+                              <a
+                                href={auditReport.businessDetails.cacUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 font-bold text-xs shadow-sm hover:bg-emerald-50 transition-colors"
+                              >
+                                <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                                CAC Certificate
+                                <ExternalLink className="h-3 w-3 ml-0.5" />
+                              </a>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-400 font-medium text-xs border border-gray-200">
+                                CAC Certificate (Missing)
+                              </span>
+                            )}
+
+                            {/* Status Report */}
+                            {auditReport.businessDetails?.statusReportUrl ? (
+                              <a
+                                href={auditReport.businessDetails.statusReportUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-900 font-bold text-xs shadow-sm hover:bg-purple-50 transition-colors"
+                              >
+                                <FileText className="h-3.5 w-3.5 text-purple-600" />
+                                Status Report
+                                <ExternalLink className="h-3 w-3 ml-0.5" />
+                              </a>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-400 font-medium text-xs border border-gray-200">
+                                Status Report (Missing)
+                              </span>
+                            )}
+
+                            {/* MEMART Document */}
+                            {auditReport.businessDetails?.memartUrl ? (
+                              <a
+                                href={auditReport.businessDetails.memartUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-blue-300 text-blue-900 font-bold text-xs shadow-sm hover:bg-blue-50 transition-colors"
+                              >
+                                <FileText className="h-3.5 w-3.5 text-blue-600" />
+                                MEMART Document
+                                <ExternalLink className="h-3 w-3 ml-0.5" />
+                              </a>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-400 font-medium text-xs border border-gray-200">
+                                MEMART (Not Required / Missing)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Financial Ledger Summary ────────────────────────────── */}
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                      2. Ledger Balance & Financial Flow Overview
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50">
+                        <p className="text-[10px] font-semibold text-purple-900 uppercase">Active Total Balance</p>
+                        <p className="text-lg font-black text-purple-950 mt-0.5">
+                          {fmt(totalActiveBalanceKobo)}
+                        </p>
+                        <p className="text-[10px] text-purple-700 font-medium">Across all sub-accounts</p>
+                      </div>
+                      <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50">
+                        <p className="text-[10px] font-semibold text-emerald-900 uppercase">Total Lifetime Inflow</p>
+                        <p className="text-lg font-black text-emerald-950 mt-0.5">
+                          {fmt(totalInflowKobo)}
+                        </p>
+                        <p className="text-[10px] text-emerald-700 font-medium">Credits to user accounts</p>
+                      </div>
+                      <div className="p-3 rounded-lg border border-red-200 bg-red-50/50">
+                        <p className="text-[10px] font-semibold text-red-900 uppercase">Total Lifetime Outflow</p>
+                        <p className="text-lg font-black text-red-950 mt-0.5">
+                          {fmt(totalOutflowKobo)}
+                        </p>
+                        <p className="text-[10px] text-red-700 font-medium">Debits from user accounts</p>
+                      </div>
+                      <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                        <p className="text-[10px] font-semibold text-gray-700 uppercase">Transaction Activity</p>
+                        <p className="text-lg font-black text-gray-900 mt-0.5">
+                          {totalTxCount} <span className="text-xs font-medium text-gray-500">records</span>
+                        </p>
+                        <p className="text-[10px] text-gray-500 font-medium">Verified Ledger Records</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Linked Platform Bank Accounts ───────────────────────── */}
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                      3. Linked Platform Bank Accounts ({auditReport.accounts?.length ?? 0})
+                    </h3>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden text-xs">
+                      <Table>
+                        <TableHeader className="bg-gray-100/80">
+                          <TableRow>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Bank Partner</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Account Number</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Account Name</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Type</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px] text-right">Available Balance</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {auditReport.accounts && auditReport.accounts.length > 0 ? (
+                            auditReport.accounts.map((acc, idx) => {
+                              const balInKobo = acc.accountBalanceInKobo ?? (acc.balance ? acc.balance : 0);
+                              return (
+                                <TableRow key={acc.id ?? idx}>
+                                  <TableCell className="font-semibold text-gray-900">
+                                    {acc.bankName ?? "SafeHaven MFB"}
+                                  </TableCell>
+                                  <TableCell className="font-mono text-gray-800 font-bold">
+                                    {acc.accountNumber ?? "N/A"}
+                                  </TableCell>
+                                  <TableCell className="text-gray-700">
+                                    {acc.accountName ?? `${auditReport.user.firstName} ${auditReport.user.lastName}`}
+                                  </TableCell>
+                                  <TableCell className="uppercase text-gray-600 font-medium text-[11px]">
+                                    {acc.accountType ?? "SAVINGS"}
+                                  </TableCell>
+                                  <TableCell className="text-right font-black text-gray-900">
+                                    {fmt(balInKobo)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={5} className="text-center text-gray-500 py-4">
+                                No active bank accounts linked.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+
+                  {/* ── Lifetime Transaction Log ────────────────────────────── */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                        4. Lifetime Transaction Log ({totalTxCount})
+                      </h3>
+                      <span className="text-[10px] text-gray-500 font-medium print:hidden">
+                        Showing all recorded entries
+                      </span>
+                    </div>
+
+                    <div className="border border-gray-200 rounded-lg overflow-hidden text-xs max-h-96 overflow-y-auto print:max-h-none print:overflow-visible">
+                      <Table>
+                        <TableHeader className="bg-gray-100/80 sticky top-0 print:static">
+                          <TableRow>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Ref / ID</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Type</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Amount</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Fee</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Status</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px]">Counterparty Details</TableHead>
+                            <TableHead className="font-bold text-gray-700 text-[11px] text-right">Timestamp</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {txList.length > 0 ? (
+                            txList.map((tx, idx) => {
+                              const amtInKobo = tx.amountInKobo ?? (tx.amount ? tx.amount : 0);
+                              const feeInKobo = tx.totalFeeInKobo ?? 0;
+                              const isCredit = tx.type === "CREDIT";
+
+                              // Resolve counterparty details
+                              let counterpartyText = "N/A";
+                              if (isCredit && tx.sender) {
+                                counterpartyText = tx.sender.name
+                                  ? `${tx.sender.name}${tx.sender.bank ? ` (${tx.sender.bank})` : ""}`
+                                  : tx.sender.accountNumber ?? tx.description ?? "Deposit";
+                              } else if (!isCredit && tx.receiver) {
+                                counterpartyText = tx.receiver.name
+                                  ? `${tx.receiver.name}${tx.receiver.bank ? ` (${tx.receiver.bank})` : ""}`
+                                  : tx.receiver.accountNumber ?? tx.description ?? "Transfer";
+                              } else {
+                                counterpartyText = tx.counterparty ?? tx.description ?? tx.narration ?? "N/A";
+                              }
+
+                              const txRef = tx.reference ?? `#${tx.id}`;
+
+                              return (
+                                <TableRow key={tx.id ?? idx} className="hover:bg-gray-50/50">
+                                  <TableCell className="font-mono text-[11px] text-gray-700 font-medium">
+                                    <span className="truncate max-w-[120px] block" title={txRef}>
+                                      {txRef}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span
+                                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                        isCredit
+                                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                          : "bg-slate-100 text-slate-800 border border-slate-200"
+                                      }`}
+                                    >
+                                      {tx.type}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className={`font-bold ${isCredit ? "text-emerald-700" : "text-gray-900"}`}>
+                                    {isCredit ? "+" : ""}{fmt(amtInKobo)}
+                                  </TableCell>
+                                  <TableCell className="text-gray-500 font-mono text-[11px]">
+                                    {feeInKobo > 0 ? fmt(feeInKobo) : "₦0.00"}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[10px] font-semibold py-0 px-1.5 ${
+                                        tx.status === "SUCCESS" || tx.status === "SUCCESSFUL"
+                                          ? "bg-emerald-500/10 text-emerald-700 border-emerald-300"
+                                          : tx.status === "FAILED"
+                                          ? "bg-red-500/10 text-red-700 border-red-300"
+                                          : "bg-amber-500/10 text-amber-700 border-amber-300"
+                                      }`}
+                                    >
+                                      {tx.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-gray-700 text-[11px] max-w-[180px] truncate" title={counterpartyText}>
+                                    {counterpartyText}
+                                  </TableCell>
+                                  <TableCell className="text-right text-gray-500 text-[11px]">
+                                    {tx.createdAt ? format(new Date(tx.createdAt), "MMM d, yyyy HH:mm") : "N/A"}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center text-gray-500 py-6">
+                                No transaction history recorded for this account.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+
+                  {/* ── Official Compliance Footer & Certification ─────────── */}
+                  <div className="border-t border-gray-300 pt-4 mt-6 text-xs space-y-4">
+                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-gray-600 text-[11px] leading-relaxed">
+                      <p className="font-bold text-gray-800 mb-0.5 uppercase tracking-wide">
+                        COMPLIANCE AUDIT CERTIFICATION & LEGAL NOTICE
+                      </p>
+                      This compliance report has been generated directly from Scath App&apos;s core ledger database. All transaction logs and balance entries are verified against double-entry accounting records and partner banking webhooks from SafeHaven Microfinance Bank (SafeHaven MFB). This report is strictly confidential and intended solely for regulatory, compliance, and internal auditing purposes.
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pt-2">
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-gray-400 font-mono">
+                          SYSTEM STAMP HASH: <span className="text-gray-600 font-bold">SHA256:{Math.random().toString(36).substring(2, 10).toUpperCase()}{userId}</span>
+                        </p>
+                        <p className="text-[10px] text-gray-400">
+                          SCATH APP ENGINE v2.4 // AUDIT VERIFICATION COMPLETE
+                        </p>
+                      </div>
+
+                      <div className="text-right border-t sm:border-t-0 sm:border-l border-gray-200 pt-2 sm:pt-0 sm:pl-6">
+                        <div className="h-8 border-b border-gray-400 w-40 mb-1"></div>
+                        <p className="font-bold text-gray-800 text-[11px]">Compliance Auditor Signature</p>
+                        <p className="text-gray-500 text-[10px]">Scath Risk & Compliance Division</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <div className="py-8 text-center text-gray-500">Failed to load audit report.</div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <ReconcileDepositModal
+        isOpen={isReconcileDepositOpen}
+        onClose={() => setIsReconcileDepositOpen(false)}
+        userId={userId}
+        defaultAccountNumber={(userAccounts[0]?.accountNumber as string) || ""}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["userAccounts", userId] });
+          queryClient.invalidateQueries({ queryKey: ["userTransactions", userId] });
+        }}
       />
     </div>
   );

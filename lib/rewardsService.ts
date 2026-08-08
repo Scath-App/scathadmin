@@ -6,6 +6,8 @@ export interface RewardHistoryUserSummary {
   firstName?: string | null;
   lastName?: string | null;
   totalReferred?: number | null;
+  verifiedReferred?: number | null;
+  pendingReferred?: number | null;
 }
 
 export interface AdminRewardHistoryItem {

@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MoneyCell } from "@/components/ui/MoneyCell";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { ReconcileDepositModal } from "@/components/accounts/ReconcileDepositModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,8 @@ export default function AccountsPage() {
   const [driftFilter, setDriftFilter] = useState<string | undefined>(undefined);
   const [sortFilter, setSortFilter] = useState<string>("default");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isReconcileOpen, setIsReconcileOpen] = useState(false);
+  const [reconcileAccountNumber, setReconcileAccountNumber] = useState("");
   const [editingPurposeId, setEditingPurposeId] = useState<number | null>(null);
   const [newPurpose, setNewPurpose] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -436,6 +439,17 @@ export default function AccountsPage() {
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
+              className="gap-2 border-emerald-200 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 h-9 text-xs font-medium"
+              onClick={() => {
+                setReconcileAccountNumber("");
+                setIsReconcileOpen(true);
+              }}
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              Reconcile Deposit
+            </Button>
+            <Button
+              variant="outline"
               className="gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 h-9 text-xs font-medium"
               disabled={refreshAllMutation.isPending}
               onClick={() => refreshAllMutation.mutate()}
@@ -614,6 +628,15 @@ export default function AccountsPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <ReconcileDepositModal
+        isOpen={isReconcileOpen}
+        onClose={() => setIsReconcileOpen(false)}
+        defaultAccountNumber={reconcileAccountNumber}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["accounts"] });
+        }}
+      />
 
       {/* End */}
     </div>

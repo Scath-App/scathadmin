@@ -3,6 +3,7 @@ import {
   Users,
   Users2,
   ShieldAlert,
+  ShieldCheck,
   BarChart3,
   ArrowRightLeft,
   FileText,
@@ -19,6 +20,7 @@ import {
   Landmark,
   LineChart,
   Settings,
+  Megaphone,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -63,12 +65,14 @@ export const navSections: NavSection[] = [
         icon: Users,
         children: [
           { label: "All Users", href: "/dashboard/users", icon: Users2 },
+          { label: "KYC Reviews", href: "/dashboard/users/kyc-reviews", icon: ShieldCheck },
           { label: "Audit Logs", href: "/dashboard/users/audit-logs", icon: ShieldAlert },
         ],
         roles: ["ADMIN", "STAFF"],
       },
     ],
   },
+
 
   // ── Finance ─────────────────────────────────────────────────────────────────
   {
@@ -153,7 +157,7 @@ export const navSections: NavSection[] = [
         label: "Referrals",
         icon: UserPlus,
         children: [
-          { label: "Referral Settings", href: "/dashboard/referrals", icon: UserPlus },
+          { label: "Referral Hub", href: "/dashboard/referrals", icon: UserPlus },
         ],
         roles: ["ADMIN", "STAFF"],
       },
@@ -162,6 +166,14 @@ export const navSections: NavSection[] = [
         icon: Gift,
         children: [
           { label: "Manage Rewards", href: "/dashboard/rewards", icon: Gift },
+        ],
+        roles: ["ADMIN", "STAFF"],
+      },
+      {
+        label: "Banners",
+        icon: Megaphone,
+        children: [
+          { label: "Banner Ads", href: "/dashboard/banners", icon: Megaphone },
         ],
         roles: ["ADMIN", "STAFF"],
       },

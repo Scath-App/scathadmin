@@ -8,7 +8,7 @@ import {
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { MoneyCell } from "@/components/ui/MoneyCell";
+import { MoneyCell, koboToNaira } from "@/components/ui/MoneyCell";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,9 +110,9 @@ export default function InvestmentsPage() {
     setEditingOpp(opp);
     form.reset({
       name: opp.name, description: opp.description ?? "",
-      minimumAmount: opp.minimumAmount ?? 0,
-      maximumAmount: opp.maximumAmount ?? 0,
-      fundingGoal: opp.fundingGoal ?? 0,
+      minimumAmount: koboToNaira(opp.minimumAmount),
+      maximumAmount: koboToNaira(opp.maximumAmount),
+      fundingGoal: koboToNaira(opp.fundingGoal),
       roiPercentage: opp.roiPercentage ?? 0,
       durationInMonths: opp.durationInMonths ?? 12,
       status: (["ACTIVE", "SOLD_OUT", "MATURED", "PAUSED"].includes(opp.status?.toUpperCase()) ? opp.status.toUpperCase() : "ACTIVE") as any,
@@ -128,25 +128,25 @@ export default function InvestmentsPage() {
       key: "minimumAmount",
       header: "Min Amount",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell naira={v} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell kobo={v} /></div>,
     },
     {
       key: "maximumAmount",
       header: "Max Amount",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell naira={v} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell kobo={v} /></div>,
     },
     {
       key: "fundingGoal",
       header: "Funding Goal",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell naira={v} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell kobo={v} /></div>,
     },
     {
       key: "totalInvested",
       header: "Total Invested",
       headerClassName: "text-right",
-      render: (v) => <div className="text-right"><MoneyCell naira={v ?? 0} /></div>,
+      render: (v) => <div className="text-right"><MoneyCell kobo={v ?? 0} /></div>,
     },
     { key: "roiPercentage", header: "ROI %", className: "font-mono text-sm", render: (v) => `${v ?? 0}%` },
     { key: "durationInMonths", header: "Duration", render: (v) => `${v} mo` },

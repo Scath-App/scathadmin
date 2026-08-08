@@ -114,18 +114,30 @@ function RewardsUserCell({ row }: { row: AdminRewardHistoryItem }) {
 
   const name = [row.user.firstName, row.user.lastName].filter(Boolean).join(" ");
   const totalReferred = row.user.totalReferred ?? 0;
+  const verifiedReferred = row.user.verifiedReferred ?? 0;
+  const pendingReferred = row.user.pendingReferred ?? 0;
 
   return (
-    <div className="min-w-[220px]">
-      <p className="text-sm font-medium text-gray-800 flex items-center gap-2">
+    <div className="min-w-[240px]">
+      <p className="text-sm font-medium text-gray-800">
         {name || `User #${row.user.id}`}
-        {totalReferred > 0 && (
-          <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue/10 text-blue">
-            {totalReferred} referral{totalReferred !== 1 ? "s" : ""}
-          </span>
-        )}
       </p>
       <p className="text-xs text-gray-500 truncate">{row.user.email}</p>
+      {totalReferred > 0 && (
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            {verifiedReferred} Verified
+          </span>
+          {pendingReferred > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+              {pendingReferred} Pending KYC
+            </span>
+          )}
+          <span className="text-[10px] text-gray-400 font-medium">
+            ({totalReferred} total)
+          </span>
+        </div>
+      )}
     </div>
   );
 }

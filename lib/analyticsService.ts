@@ -225,6 +225,16 @@ export type SaveboxAnalyticsResponse = {
       avgInterestRate: number;
       completionRate: number;
     }>;
+    breakdownByDuration?: Array<{
+      durationMonths: number;
+      type?: string;
+      count: number;
+      capital: number;
+      earliestCreatedAt?: string | null;
+      latestCreatedAt?: string | null;
+      earliestMaturityDate?: string | null;
+      latestMaturityDate?: string | null;
+    }>;
     portfolioAllocations: Array<{
       equityListingId: number;
       companyName: string;
@@ -246,12 +256,42 @@ export type SaveboxAnalyticsResponse = {
   };
 };
 
+export type SaveboxDurationItem = {
+  saveboxId: number;
+  reference: string;
+  userName: string;
+  userEmail: string | null;
+  durationMonths: number;
+  type: string;
+  capital: number;
+  status: string;
+  createdAt: string;
+  maturityDate: string | null;
+};
+
+export type SaveboxDurationItemsResponse = {
+  durationMonths: number;
+  items: SaveboxDurationItem[];
+};
+
 export const getSaveboxAnalytics = async (
   params: AdminAnalyticsWindow | AnalyticsQueryParams = "30d",
   timezone?: string
 ): Promise<SaveboxAnalyticsResponse> => {
   const searchParams = buildAnalyticsParams(params, timezone);
   const response = await api.get(`/admin/analytics/savebox?${searchParams.toString()}`);
+  return response.data;
+};
+
+export const getSaveboxDurationItems = async (
+  durationMonths: number,
+  type?: string,
+  queryParams?: AdminAnalyticsWindow | AnalyticsQueryParams,
+): Promise<SaveboxDurationItemsResponse> => {
+  const searchParams = buildAnalyticsParams(queryParams);
+  searchParams.set("durationMonths", String(durationMonths));
+  if (type) searchParams.set("type", type);
+  const response = await api.get(`/admin/analytics/savebox/duration-items?${searchParams.toString()}`);
   return response.data;
 };
 

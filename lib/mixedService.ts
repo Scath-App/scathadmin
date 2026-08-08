@@ -2,6 +2,40 @@ import api from "./api";
 
 // ─── Referrals ─────────────────────────────────────────────────────────────────
 
+export interface ReferralLeaderboardUser {
+  id: number;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  referralCode: string;
+  totalReferred: number;
+  verifiedReferred: number;
+  pendingReferred: number;
+  createdAt: string;
+}
+
+export interface ReferralAnalyticsResponse {
+  summary: {
+    totalReferrals: number;
+    verifiedReferrals: number;
+    pendingReferrals: number;
+    totalBonusPaid: number;
+  };
+  leaderboard: ReferralLeaderboardUser[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}
+
+export const getReferralAnalytics = async (params?: { page?: number; limit?: number }) => {
+  const response = await api.get("admin/referral/analytics", { params });
+  return response.data as ReferralAnalyticsResponse;
+};
+
 export const getReferralSettings = async () => {
   try {
     const response = await api.get("admin/referral/settings");

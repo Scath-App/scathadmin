@@ -61,6 +61,43 @@ export const syncAllAccounts = async () => {
   return response.data ?? {};
 };
 
+/** GET /admin/accounts/verify-transfer/:sessionId — Preview SafeHaven transfer before reconciliation */
+export const verifyTransferForReconciliation = async (sessionId: string) => {
+  const response = await api.get(`admin/accounts/verify-transfer/${sessionId}`);
+  return response.data;
+};
+
+/** POST /admin/accounts/reconcile-inward-transfer — Reconcile inward transfer into ledger */
+export const reconcileInwardTransfer = async (data: {
+  accountNumber: string;
+  sessionId: string;
+  paymentReference?: string;
+  amountInNaira?: number;
+  senderName?: string;
+  senderBank?: string;
+  narration?: string;
+}) => {
+  const response = await api.post("admin/accounts/reconcile-inward-transfer", data);
+  return response.data;
+};
+
+/** POST /admin/users/:userId/reconcile-inward-transfer — User-scoped reconciliation */
+export const reconcileUserInwardTransfer = async (
+  userId: number | string,
+  data: {
+    accountNumber?: string;
+    sessionId: string;
+    paymentReference?: string;
+    amountInNaira?: number;
+    senderName?: string;
+    senderBank?: string;
+    narration?: string;
+  },
+) => {
+  const response = await api.post(`admin/users/${userId}/reconcile-inward-transfer`, data);
+  return response.data;
+};
+
 // ─── SafeHaven Accounts ────────────────────────────────────────────────────────
 
 /** GET /admin/accounts/sync/:jobId */
