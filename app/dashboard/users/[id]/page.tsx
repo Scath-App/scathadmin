@@ -538,7 +538,7 @@ export default function UserDetailPage() {
                   <ShieldCheck className="w-3 h-3 text-purple-600" />
                   {profile.tier?.name
                     ? profile.tier.name
-                    : `Tier ${profile.tier?.level ?? (profile.kycStatus ? 2 : 1)}`}
+                    : `Tier ${profile.tier?.level ?? (profile.kycStatus ? 1 : 0)}`}
                 </Badge>
 
                 {/* Customer Type Badge */}
