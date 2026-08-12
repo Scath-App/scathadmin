@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  getEquityListings, createEquityListing, updateEquityListing, deleteEquityListing,
+  getEquityListings, createEquityListing, updateEquityListing, deleteEquityListing, getEquityCategories,
+  getCategoryEntities, createEquityCategory, updateEquityCategory, deleteEquityCategory,
 } from "@/lib/equityService";
 import { DataTable, Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -24,7 +25,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Edit, Trash2, TrendingUp, Lock } from "lucide-react";
+import { Plus, Edit, Trash2, TrendingUp, Lock, FolderTree, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "@/hooks/useRole";
 
@@ -43,6 +44,7 @@ const createSchema = z.object({
   availableShares: z.coerce.number().min(0),
   lockInPeriod: z.coerce.number().min(0),
   isSaveboxEligible: z.boolean(),
+  portfolioCategory: z.string().optional(),
 });
 
 /** Used for editing an existing listing — status is allowed */
@@ -73,12 +75,73 @@ export default function EquityListingsPage() {
   const [editingEquity, setEditingEquity] = useState<any>(null);
   const [metricsEquity, setMetricsEquity] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isCustomCreateCategory, setIsCustomCreateCategory] = useState(false);
+  const [isCustomEditCategory, setIsCustomEditCategory] = useState(false);
+
+  // Category Management state
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatDesc, setNewCatDesc] = useState("");
+  const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [editCatName, setEditCatName] = useState("");
+  const [editCatSlug, setEditCatSlug] = useState("");
+  const [editCatDesc, setEditCatDesc] = useState("");
+  const [editCatIsActive, setEditCatIsActive] = useState(true);
 
   const { data, isLoading } = useQuery({
     queryKey: ["equityListings", page],
     queryFn: () => getEquityListings(page, LIMIT),
     enabled: isAdmin,
   });
+
+  const { data: categoriesRaw } = useQuery({
+    queryKey: ["equityCategories"],
+    queryFn: getEquityCategories,
+  });
+
+  const { data: categoryEntitiesRaw, isLoading: isLoadingCategoryEntities } = useQuery({
+    queryKey: ["categoryEntities"],
+    queryFn: () => getCategoryEntities(true),
+    enabled: isAdmin && isCategoryModalOpen,
+  });
+
+  const categoryEntities: any[] = Array.isArray(categoryEntitiesRaw) ? categoryEntitiesRaw : [];
+
+  const createCatMutation = useMutation({
+    mutationFn: (v: { name: string; description?: string }) => createEquityCategory(v),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categoryEntities"] });
+      queryClient.invalidateQueries({ queryKey: ["equityCategories"] });
+      toast.success("Category created successfully.");
+      setNewCatName("");
+      setNewCatDesc("");
+    },
+    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to create category."),
+  });
+
+  const updateCatMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => updateEquityCategory(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categoryEntities"] });
+      queryClient.invalidateQueries({ queryKey: ["equityCategories"] });
+      queryClient.invalidateQueries({ queryKey: ["equityListings"] });
+      toast.success("Category updated.");
+      setEditingCategory(null);
+    },
+    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to update category."),
+  });
+
+  const deleteCatMutation = useMutation({
+    mutationFn: (id: number) => deleteEquityCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categoryEntities"] });
+      queryClient.invalidateQueries({ queryKey: ["equityCategories"] });
+      toast.success("Category deleted.");
+    },
+    onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to delete category."),
+  });
+
+  const categories: string[] = Array.isArray(categoriesRaw) ? categoriesRaw : [];
 
   const listings: any[] = data?.data ?? [];
   const meta = data?.meta ?? {};
@@ -90,7 +153,7 @@ export default function EquityListingsPage() {
       companyName: "", description: "",
       sharePrice: 0, valuation: 0, mrr: 0, arr: 0,
       totalShares: 0, availableShares: 0,
-      lockInPeriod: 0, isSaveboxEligible: false,
+      lockInPeriod: 0, isSaveboxEligible: false, portfolioCategory: "",
     },
   });
 
@@ -101,7 +164,7 @@ export default function EquityListingsPage() {
       companyName: "", description: "",
       sharePrice: 0, valuation: 0, mrr: 0, arr: 0,
       totalShares: 0, availableShares: 0,
-      lockInPeriod: 0, isSaveboxEligible: false, status: "pending",
+      lockInPeriod: 0, isSaveboxEligible: false, status: "pending", portfolioCategory: "",
     },
   });
 
@@ -169,6 +232,7 @@ export default function EquityListingsPage() {
       availableShares: eq.availableShares ?? 0,
       lockInPeriod: eq.lockInPeriod ?? eq.lockInPeriodDays ?? 0,
       isSaveboxEligible: !!eq.isSaveboxEligible,
+      portfolioCategory: eq.portfolioCategory ?? "",
       status: (["pending", "active", "closed", "suspended"].includes(eq.status?.toLowerCase())
         ? eq.status.toLowerCase()
         : "pending") as "pending" | "active" | "closed" | "suspended",
@@ -285,9 +349,14 @@ export default function EquityListingsPage() {
         subtitle="Manage all equity listings. Valuation changes auto-create history entries."
         actions={
           isAdmin ? (
-            <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
-              <Plus className="w-4 h-4" /> New Listing
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" className="border-gray-200 text-gray-700 gap-2" onClick={() => setIsCategoryModalOpen(true)}>
+                <FolderTree className="w-4 h-4" /> Manage Categories
+              </Button>
+              <Button className="bg-blue hover:bg-darkBlue text-white gap-2" onClick={openCreate}>
+                <Plus className="w-4 h-4" /> New Listing
+              </Button>
+            </div>
           ) : undefined
         }
       />
@@ -352,13 +421,49 @@ export default function EquityListingsPage() {
                     <FormItem><FormLabel>ARR (₦) <span className="text-gray-400 font-normal text-xs">(Optional)</span></FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={createForm.control} name="totalShares" render={({ field }) => (
-                    <FormItem><FormLabel>Total Shares</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Total Shares</FormLabel><FormControl><Input type="number" min={0} step="0.0001" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={createForm.control} name="availableShares" render={({ field }) => (
-                    <FormItem><FormLabel>Available Shares</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Available Shares</FormLabel><FormControl><Input type="number" min={0} step="0.0001" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={createForm.control} name="lockInPeriod" render={({ field }) => (
                     <FormItem><FormLabel>Lock-in Period (days)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={createForm.control} name="portfolioCategory" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Portfolio Category</FormLabel>
+                      <div className="space-y-2">
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm capitalize"
+                          value={isCustomCreateCategory ? "__custom__" : (field.value ?? "")}
+                          onChange={(e) => {
+                            if (e.target.value === "__custom__") {
+                              setIsCustomCreateCategory(true);
+                              field.onChange("");
+                            } else {
+                              setIsCustomCreateCategory(false);
+                              field.onChange(e.target.value);
+                            }
+                          }}
+                        >
+                          <option value="">None / Unassigned</option>
+                          {categories.map((cat) => (
+                            <option key={cat} value={cat} className="capitalize">
+                              {cat.replace("_", " ")}
+                            </option>
+                          ))}
+                          <option value="__custom__">+ Add Custom Category...</option>
+                        </select>
+                        {isCustomCreateCategory && (
+                          <Input
+                            placeholder="Type new category name..."
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value.toLowerCase().trim())}
+                          />
+                        )}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                 </div>
                 <FormField control={createForm.control} name="isSaveboxEligible" render={({ field }) => (
@@ -414,10 +519,10 @@ export default function EquityListingsPage() {
                     <FormItem><FormLabel>ARR (₦) <span className="text-gray-400 font-normal text-xs">(Optional)</span></FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={editForm.control} name="totalShares" render={({ field }) => (
-                    <FormItem><FormLabel>Total Shares</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Total Shares</FormLabel><FormControl><Input type="number" min={0} step="0.0001" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={editForm.control} name="availableShares" render={({ field }) => (
-                    <FormItem><FormLabel>Available Shares</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Available Shares</FormLabel><FormControl><Input type="number" min={0} step="0.0001" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={editForm.control} name="lockInPeriod" render={({ field }) => (
                     <FormItem><FormLabel>Lock-in Period (days)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
@@ -431,6 +536,42 @@ export default function EquityListingsPage() {
                         <option value="closed">Closed</option>
                         <option value="suspended">Suspended</option>
                       </select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={editForm.control} name="portfolioCategory" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Portfolio Category</FormLabel>
+                      <div className="space-y-2">
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm capitalize"
+                          value={isCustomEditCategory ? "__custom__" : (field.value ?? "")}
+                          onChange={(e) => {
+                            if (e.target.value === "__custom__") {
+                              setIsCustomEditCategory(true);
+                              field.onChange("");
+                            } else {
+                              setIsCustomEditCategory(false);
+                              field.onChange(e.target.value);
+                            }
+                          }}
+                        >
+                          <option value="">None / Unassigned</option>
+                          {categories.map((cat) => (
+                            <option key={cat} value={cat} className="capitalize">
+                              {cat.replace("_", " ")}
+                            </option>
+                          ))}
+                          <option value="__custom__">+ Add Custom Category...</option>
+                        </select>
+                        {isCustomEditCategory && (
+                          <Input
+                            placeholder="Type new category name..."
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value.toLowerCase().trim())}
+                          />
+                        )}
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -517,6 +658,208 @@ export default function EquityListingsPage() {
         loading={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate(deletingId!)}
       />
+
+      {/* ── Manage Categories Modal ────────────────────────────────────────── */}
+      <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto space-y-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <FolderTree className="w-5 h-5 text-blue" /> Portfolio Categories Management
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Create new category row */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Create New Category</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Input
+                placeholder="Category Name (e.g. AgriTech)"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+              />
+              <Input
+                placeholder="Description (Optional)"
+                value={newCatDesc}
+                onChange={(e) => setNewCatDesc(e.target.value)}
+              />
+            </div>
+            <Button
+              size="sm"
+              className="bg-blue hover:bg-darkBlue text-white gap-2 w-full sm:w-auto"
+              disabled={!newCatName.trim() || createCatMutation.isPending}
+              onClick={() => createCatMutation.mutate({ name: newCatName, description: newCatDesc })}
+            >
+              <Plus className="w-4 h-4" /> {createCatMutation.isPending ? "Creating..." : "Add Category"}
+            </Button>
+          </div>
+
+          {/* Categories list table */}
+          <div className="border border-gray-100 rounded-xl overflow-hidden bg-white">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider border-b border-gray-100">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Name</th>
+                  <th className="px-4 py-3 font-semibold">Slug</th>
+                  <th className="px-4 py-3 font-semibold">Description</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {isLoadingCategoryEntities ? (
+                  <tr>
+                    <td colSpan={5} className="text-center text-gray-400 py-8 text-xs">
+                      Loading categories...
+                    </td>
+                  </tr>
+                ) : categoryEntities.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center text-gray-400 py-8 text-xs">
+                      No categories found.
+                    </td>
+                  </tr>
+                ) : (
+                  categoryEntities.map((cat) => (
+                    <tr key={cat.id} className="hover:bg-gray-50/50">
+                      <td className="px-4 py-3 font-medium text-gray-900">{cat.name}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{cat.slug}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500 max-w-[150px] truncate">{cat.description ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateCatMutation.mutate({
+                              id: cat.id,
+                              data: { isActive: !cat.isActive },
+                            })
+                          }
+                          className="focus:outline-none"
+                          title="Click to toggle status"
+                        >
+                          <Badge
+                            variant="outline"
+                            className={
+                              cat.isActive
+                                ? "text-greeny border-greeny/30 bg-greeny/5 text-xs cursor-pointer hover:bg-greeny/10"
+                                : "text-gray-400 border-gray-200 text-xs cursor-pointer hover:bg-gray-100"
+                            }
+                          >
+                            {cat.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-blue hover:bg-blue/5 gap-1"
+                            onClick={() => {
+                              setEditingCategory(cat);
+                              setEditCatName(cat.name);
+                              setEditCatSlug(cat.slug);
+                              setEditCatDesc(cat.description ?? "");
+                              setEditCatIsActive(cat.isActive);
+                            }}
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-red hover:bg-red/5"
+                            onClick={() => deleteCatMutation.mutate(cat.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Category Modal ────────────────────────────────────────── */}
+      <Dialog open={editingCategory !== null} onOpenChange={(v) => !v && setEditingCategory(null)}>
+        <DialogContent className="max-w-md space-y-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Pencil className="w-5 h-5 text-blue" /> Edit Category
+            </DialogTitle>
+          </DialogHeader>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!editingCategory) return;
+              updateCatMutation.mutate({
+                id: editingCategory.id,
+                data: {
+                  name: editCatName,
+                  slug: editCatSlug,
+                  description: editCatDesc,
+                  isActive: editCatIsActive,
+                },
+              });
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-700">Category Name</label>
+              <Input
+                placeholder="Name"
+                value={editCatName}
+                onChange={(e) => setEditCatName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-700">Slug (Unique Identifier)</label>
+              <Input
+                placeholder="slug (e.g. tech, real_estate)"
+                value={editCatSlug}
+                onChange={(e) => setEditCatSlug(e.target.value)}
+              />
+              <p className="text-[11px] text-gray-400">Updating slug automatically re-links all assigned equity listings.</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-700">Description</label>
+              <Textarea
+                placeholder="Description"
+                value={editCatDesc}
+                onChange={(e) => setEditCatDesc(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-1">
+              <span className="text-xs font-semibold text-gray-700">Active Status</span>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={editCatIsActive}
+                  onCheckedChange={setEditCatIsActive}
+                />
+                <span className="text-xs text-gray-500">{editCatIsActive ? "Active" : "Inactive"}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setEditingCategory(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1 bg-blue text-white" disabled={updateCatMutation.isPending}>
+                {updateCatMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -32,6 +32,37 @@ export const deleteEquityListing = async (id: number | string) => {
   return response.data;
 };
 
+export const getEquityCategories = async () => {
+  try {
+    const response = await api.get("admin/equity/categories");
+    return response.data;
+  } catch (_e) {
+    return [];
+  }
+};
+
+export const getCategoryEntities = async (includeInactive = true) => {
+  const response = await api.get("admin/equity/categories/manage", {
+    params: { includeInactive },
+  });
+  return response.data;
+};
+
+export const createEquityCategory = async (data: { name: string; slug?: string; description?: string }) => {
+  const response = await api.post("admin/equity/categories", data);
+  return response.data;
+};
+
+export const updateEquityCategory = async (id: number | string, data: { name?: string; slug?: string; description?: string; isActive?: boolean }) => {
+  const response = await api.patch(`admin/equity/categories/${id}`, data);
+  return response.data;
+};
+
+export const deleteEquityCategory = async (id: number | string) => {
+  const response = await api.delete(`admin/equity/categories/${id}`);
+  return response.data;
+};
+
 // ─── Exit Requests ─────────────────────────────────────────────────────────────
 
 /** GET /admin/equity/exit-requests — 1-based pagination */
