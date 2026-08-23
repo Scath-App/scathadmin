@@ -490,34 +490,19 @@ export function ReconcileDepositModal({
           </Button>
 
           {isInternal ? (
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                disabled={!isPending || isMutating}
-                onClick={() => reconcilePendingMutation.mutate("REVERSE_TO_SENDER")}
-                className="h-9 text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 flex items-center gap-1"
-              >
-                {reconcilePendingMutation.isPending ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <RotateCcw className="w-3.5 h-3.5" />
-                )}
-                Reverse & Refund Sender
-              </Button>
-              <Button
-                type="button"
-                disabled={!isPending || isMutating}
-                onClick={() => reconcilePendingMutation.mutate("FORCE_CREDIT_RECEIVER")}
-                className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 flex items-center gap-1"
-              >
-                {reconcilePendingMutation.isPending ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                )}
-                Force Credit Receiver
-              </Button>
-            </div>
+            <Button
+              type="button"
+              disabled={!isPending || isMutating}
+              onClick={() => reconcilePendingMutation.mutate("REVERSE_TO_SENDER")}
+              className="h-9 text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 flex items-center gap-1.5"
+            >
+              {reconcilePendingMutation.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              Reverse & Refund Sender
+            </Button>
           ) : (
             <Button
               type="button"
