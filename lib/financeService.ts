@@ -68,6 +68,17 @@ export const verifyTransferForReconciliation = async (sessionId: string) => {
 };
 
 /** POST /admin/accounts/reconcile-inward-transfer — Reconcile inward transfer into ledger */
+
+/** POST /admin/accounts/reconcile-pending-transfer — Reconcile pending transfer by reversing or force crediting */
+export const reconcilePendingTransfer = async (data: {
+  reference: string;
+  action: "REVERSE_TO_SENDER" | "FORCE_CREDIT_RECEIVER";
+  reason?: string;
+}) => {
+  const response = await api.post("admin/accounts/reconcile-pending-transfer", data);
+  return response.data;
+};
+
 export const reconcileInwardTransfer = async (data: {
   accountNumber: string;
   sessionId: string;

@@ -4,17 +4,18 @@ import React, { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
   Loader2,
-  RefreshCw,
+  RotateCcw,
   Search,
   ShieldCheck,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   reconcileInwardTransfer,
+  reconcilePendingTransfer,
   reconcileUserInwardTransfer,
   verifyTransferForReconciliation,
 } from "@/lib/financeService";
@@ -50,7 +51,8 @@ export function ReconcileDepositModal({
   const [sessionId, setSessionId] = useState("");
   const [amountInNaira, setAmountInNaira] = useState("");
   const [senderName, setSenderName] = useState("");
-  const [verifiedData, setVerifiedData] = useState<any | null>(null);
+  const [reason, setReason] = useState("");
+  const [verifiedResult, setVerifiedResult] = useState<any | null>(null);
 
   // Sync state if defaultAccountNumber changes
   React.useEffect(() => {
@@ -63,7 +65,8 @@ export function ReconcileDepositModal({
     setSessionId("");
     setAmountInNaira("");
     setSenderName("");
-    setVerifiedData(null);
+    setReason("");
+    setVerifiedResult(null);
   };
 
   const handleClose = () => {
@@ -71,110 +74,156 @@ export function ReconcileDepositModal({
     onClose();
   };
 
-  // Step 1: Verify transfer details on SafeHaven
+  // Step 1: Verify transfer details (works for both Inward Deposits and Internal/External Transfers)
   const verifyMutation = useMutation({
     mutationFn: (idToVerify: string) => verifyTransferForReconciliation(idToVerify),
     onSuccess: (res) => {
       if (res?.data) {
-        setVerifiedData(res.data);
-        if (res.data.destinationAccountNumber && !accountNumber) {
-          setAccountNumber(res.data.destinationAccountNumber);
+        setVerifiedResult(res);
+        const data = res.data;
+        if (data.destinationAccountNumber && !accountNumber) {
+          setAccountNumber(data.destinationAccountNumber);
         }
-        if (res.data.amount) {
-          setAmountInNaira(String(res.data.amount));
+        if (data.amount) {
+          setAmountInNaira(String(data.amount));
         }
-        if (res.data.senderName && res.data.senderName !== "External Sender") {
-          setSenderName(res.data.senderName);
+        if (data.senderName && data.senderName !== "External Sender") {
+          setSenderName(data.senderName);
         }
-        if (res.data.requiresManualDetails) {
+
+        if (res.kind === "INTERNAL_TRANSFER") {
+          toast.success("Internal transfer record found!");
+        } else if (data.requiresManualDetails) {
           toast.info("Session ID confirmed. Enter deposit amount and target account number.");
         } else {
-          toast.success("Deposit verified on SafeHaven provider!");
+          toast.success("Transaction verified successfully!");
         }
       }
     },
     onError: (err: any) => {
-      setVerifiedData(null);
+      setVerifiedResult(null);
       toast.error(
         err?.response?.data?.message ||
-          "Could not verify deposit on SafeHaven. Please check Session ID.",
+          "Could not verify transaction. Please check the Session ID / Reference.",
       );
     },
   });
 
-  // Step 2: Confirm & Reconcile into local ledger
-  const reconcileMutation = useMutation({
+  // Reconcile Inward Deposit Mutation
+  const reconcileInwardMutation = useMutation({
     mutationFn: async () => {
-      const targetAcc = (accountNumber.trim() || verifiedData?.destinationAccountNumber || "").trim();
-      const numAmount = Number(amountInNaira) || Number(verifiedData?.amount) || 0;
-      if (userId) {
-        return reconcileUserInwardTransfer(userId, {
-          accountNumber: targetAcc,
-          sessionId: sessionId.trim(),
-          amountInNaira: numAmount,
-          senderName: senderName || verifiedData?.senderName,
-        });
-      }
-      return reconcileInwardTransfer({
-        accountNumber: targetAcc,
+      const payload = {
+        accountNumber: effectiveAccountNumber,
         sessionId: sessionId.trim(),
-        amountInNaira: numAmount,
+        paymentReference: verifiedData?.paymentReference,
+        amountInNaira: effectiveAmount,
         senderName: senderName || verifiedData?.senderName,
-      });
+        senderBank: verifiedData?.senderBank,
+        narration: verifiedData?.narration,
+        providerFeeInNaira: verifiedData?.feeInNaira,
+      };
+
+      if (userId) {
+        return reconcileUserInwardTransfer(userId, payload);
+      }
+      return reconcileInwardTransfer(payload);
     },
     onSuccess: (res) => {
       toast.success(
-        res?.message || "Inward deposit successfully reconciled into ledger!",
+        res?.message || "Inward deposit reconciled successfully into ledger!",
       );
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["admin-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-user-transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-transactions"] });
-      if (onSuccess) onSuccess();
+      queryClient.invalidateQueries({ queryKey: ["admin-account-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["user-accounts", userId] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      onSuccess?.();
       handleClose();
     },
     onError: (err: any) => {
       toast.error(
-        err?.response?.data?.message || "Failed to reconcile deposit into ledger.",
+        err?.response?.data?.message ||
+          "Failed to reconcile deposit. Ensure account number and session ID are valid.",
       );
     },
   });
 
-  const handleVerifySubmit = (e: React.FormEvent) => {
+  // Reconcile Pending Transfer Mutation (Internal P2P)
+  const reconcilePendingMutation = useMutation({
+    mutationFn: async (action: "REVERSE_TO_SENDER" | "FORCE_CREDIT_RECEIVER") => {
+      return reconcilePendingTransfer({
+        reference: verifiedData?.reference || sessionId.trim(),
+        action,
+        reason: reason.trim() || undefined,
+      });
+    },
+    onSuccess: (res) => {
+      toast.success(res?.message || "Transfer reconciled successfully!");
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-account-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["user-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      onSuccess?.();
+      handleClose();
+    },
+    onError: (err: any) => {
+      toast.error(
+        err?.response?.data?.message ||
+          "Failed to reconcile pending transfer.",
+      );
+    },
+  });
+
+  const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sessionId.trim()) {
-      toast.error("Please enter a valid SafeHaven Session ID");
+    const cleanId = sessionId.trim();
+    if (!cleanId) {
+      toast.error("Please enter a Session ID or Payment Reference");
       return;
     }
-    verifyMutation.mutate(sessionId.trim());
+    verifyMutation.mutate(cleanId);
   };
 
-  const isOutward = String(verifiedData?.type || "").toLowerCase() === "outwards";
+  const verifiedData = verifiedResult?.data;
+  const transferKind = verifiedResult?.kind || "INWARD_DEPOSIT";
+  const isInternal = transferKind === "INTERNAL_TRANSFER";
+  const isOutward = transferKind === "EXTERNAL_TRANSFER" || String(verifiedData?.type).toLowerCase() === "outwards";
   const isAlreadyReconciled = Boolean(verifiedData?.isAlreadyReconciled);
-  const isDisabled = isOutward || isAlreadyReconciled;
+  const isPending = verifiedData?.status === "PENDING";
+  const isMutating =
+    verifyMutation.isPending ||
+    reconcileInwardMutation.isPending ||
+    reconcilePendingMutation.isPending;
 
-  const effectiveAccountNumber = accountNumber.trim() || verifiedData?.destinationAccountNumber || "";
-  const effectiveAmount = Number(amountInNaira) || Number(verifiedData?.amount) || 0;
+  const effectiveAmount = verifiedData?.amount
+    ? Number(verifiedData.amount)
+    : Number(amountInNaira) || 0;
+
+  const effectiveAccountNumber =
+    accountNumber || verifiedData?.destinationAccountNumber || defaultAccountNumber;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-[540px]">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-blue/10 flex items-center justify-center text-blue">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+              <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
               <DialogTitle className="text-base font-bold text-gray-900">
-                Reconcile Missed Inward Deposit
+                Unified Reconciliation
               </DialogTitle>
               <DialogDescription className="text-xs text-gray-500">
-                Enter SafeHaven Session ID to auto-verify and credit the local ledger.
+                Enter any SafeHaven Session ID or Reference to verify and reconcile.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleVerifySubmit} className="space-y-4 py-2">
+        <form onSubmit={handleVerify} className="space-y-3 pt-2">
+          {/* Session ID / Reference Input */}
           <div className="space-y-1.5">
             <Label htmlFor="sessionId" className="text-xs font-semibold text-gray-700">
               SafeHaven Session ID / Reference <span className="text-red-500">*</span>
@@ -182,32 +231,34 @@ export function ReconcileDepositModal({
             <div className="flex gap-2">
               <Input
                 id="sessionId"
-                placeholder="e.g. 000026260803184720000231556426"
+                placeholder="e.g. TRF-MT69LA9ID3A078 or 09028626..."
                 value={sessionId}
                 onChange={(e) => {
                   setSessionId(e.target.value);
-                  if (verifiedData) setVerifiedData(null);
+                  setVerifiedResult(null);
                 }}
                 className="h-9 text-xs font-mono"
                 required
+                disabled={isMutating}
               />
               <Button
                 type="submit"
-                variant="outline"
-                disabled={verifyMutation.isPending || !sessionId.trim()}
-                className="h-9 text-xs gap-1.5 whitespace-nowrap bg-blue/5 border-blue/20 text-blue hover:bg-blue/10"
+                size="sm"
+                disabled={!sessionId.trim() || isMutating}
+                className="h-9 px-3 text-xs bg-gray-900 hover:bg-gray-800 text-white font-medium shrink-0 flex items-center gap-1.5"
               >
                 {verifyMutation.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <Search className="w-3.5 h-3.5" />
                 )}
-                Verify Deposit
+                Verify
               </Button>
             </div>
           </div>
 
-          {verifiedData?.requiresManualDetails && (
+          {/* Inward Deposit Manual Inputs (Fallback) */}
+          {transferKind === "INWARD_DEPOSIT" && verifiedData?.requiresManualDetails && (
             <>
               {!defaultAccountNumber && (
                 <div className="space-y-1.5 pt-1">
@@ -224,7 +275,7 @@ export function ReconcileDepositModal({
                     onChange={(e) => setAccountNumber(e.target.value)}
                     className="h-9 text-xs font-mono"
                     required
-                    disabled={isDisabled}
+                    disabled={isMutating}
                   />
                 </div>
               )}
@@ -243,7 +294,7 @@ export function ReconcileDepositModal({
                     onChange={(e) => setAmountInNaira(e.target.value)}
                     className="h-9 text-xs font-bold text-emerald-700"
                     required
-                    disabled={isDisabled}
+                    disabled={isMutating}
                   />
                 </div>
 
@@ -257,69 +308,124 @@ export function ReconcileDepositModal({
                     value={senderName}
                     onChange={(e) => setSenderName(e.target.value)}
                     className="h-9 text-xs"
-                    disabled={isDisabled}
+                    disabled={isMutating}
                   />
                 </div>
               </div>
             </>
           )}
+
+          {/* Internal Transfer Reason Input */}
+          {isInternal && isPending && (
+            <div className="space-y-1.5 pt-1">
+              <Label htmlFor="reason" className="text-xs font-semibold text-gray-700">
+                Reason for Manual Resolution (Audit Log)
+              </Label>
+              <Input
+                id="reason"
+                placeholder="e.g. SafeHaven timed out during dispatch; reversing to refund sender"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="h-9 text-xs"
+                disabled={isMutating}
+              />
+            </div>
+          )}
         </form>
 
-        {/* Live Verified Transfer Card */}
+        {/* Live Verified Result Card */}
         {verifiedData && (
           <div
             className={`rounded-xl border p-4 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200 ${
-              isDisabled
-                ? "border-amber-200 bg-amber-50/50"
-                : "border-emerald-200 bg-emerald-50/50"
+              isInternal
+                ? isPending
+                  ? "border-amber-200 bg-amber-50/50"
+                  : "border-blue-200 bg-blue-50/50"
+                : isOutward || isAlreadyReconciled
+                  ? "border-amber-200 bg-amber-50/50"
+                  : "border-emerald-200 bg-emerald-50/50"
             }`}
           >
             <div className="flex items-center justify-between">
               <div
                 className={`flex items-center gap-1.5 text-xs font-bold ${
-                  isDisabled ? "text-amber-800" : "text-emerald-700"
+                  isInternal
+                    ? "text-blue-900"
+                    : isOutward || isAlreadyReconciled
+                      ? "text-amber-800"
+                      : "text-emerald-700"
                 }`}
               >
-                <CheckCircle2
-                  className={`w-4 h-4 ${
-                    isDisabled ? "text-amber-600" : "text-emerald-600"
-                  }`}
-                />
+                {isInternal ? (
+                  <UserCheck className="w-4 h-4 text-blue-600" />
+                ) : (
+                  <CheckCircle2
+                    className={`w-4 h-4 ${
+                      isOutward || isAlreadyReconciled ? "text-amber-600" : "text-emerald-600"
+                    }`}
+                  />
+                )}
                 <span>
-                  {isOutward
-                    ? "Outward Transfer Found (View Only)"
-                    : isAlreadyReconciled
-                      ? "Deposit Already Reconciled"
-                      : "Verified Deposit Session"}
+                  {isInternal
+                    ? "Internal Transfer (P2P)"
+                    : isOutward
+                      ? "Outward Bank Transfer (NIP)"
+                      : isAlreadyReconciled
+                        ? "Deposit Already Reconciled"
+                        : "Verified Inward Deposit"}
                 </span>
               </div>
               <span
                 className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                  isDisabled
-                    ? "bg-amber-100 text-amber-900 border border-amber-300"
-                    : "bg-emerald-100 text-emerald-800"
+                  isInternal
+                    ? isPending
+                      ? "bg-amber-100 text-amber-900 border border-amber-300"
+                      : "bg-emerald-100 text-emerald-800"
+                    : isOutward || isAlreadyReconciled
+                      ? "bg-amber-100 text-amber-900 border border-amber-300"
+                      : "bg-emerald-100 text-emerald-800"
                 }`}
               >
-                {isOutward
-                  ? "Outward (Cannot Credit)"
-                  : isAlreadyReconciled
-                    ? `Reconciled (#${verifiedData.reconciledTransactionId})`
-                    : "Ready to Reconcile"}
+                {isInternal
+                  ? `Status: ${verifiedData.status}`
+                  : isOutward
+                    ? "Outward (Cannot Credit)"
+                    : isAlreadyReconciled
+                      ? `Reconciled (#${verifiedData.reconciledTransactionId})`
+                      : "Ready to Reconcile"}
               </span>
             </div>
 
-            {isOutward && (
-              <div className="text-xs text-amber-900 font-medium p-2.5 rounded-lg bg-amber-100/70 border border-amber-200">
-                ⚠️ This Session ID belongs to an <strong>OUTWARD transfer</strong> (Money Sent Out). Outward transfers cannot be credited as inward deposits.
+            {/* Provider Status Alert */}
+            {isInternal && (
+              <div
+                className={`text-xs p-2.5 rounded-lg border flex items-center justify-between ${
+                  verifiedData.providerStatus === "NOT_FOUND_ON_PROVIDER" || verifiedData.providerStatus === "Not Found on Provider"
+                    ? "bg-rose-50 text-rose-900 border-rose-200"
+                    : "bg-amber-50 text-amber-900 border-amber-200"
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Provider Status: <strong>{verifiedData.providerStatus}</strong>
+                  </span>
+                </div>
+                {isPending && (
+                  <span className="text-[10px] bg-white px-2 py-0.5 rounded font-mono font-medium border">
+                    Funds Held in Ledger
+                  </span>
+                )}
               </div>
             )}
 
-            {isAlreadyReconciled && !isOutward && (
+            {isAlreadyReconciled && !isInternal && (
               <div className="text-xs text-amber-900 font-medium p-2.5 rounded-lg bg-amber-100/70 border border-amber-200">
                 🔒 This deposit has <strong>ALREADY been reconciled</strong> into the database (ID #{verifiedData.reconciledTransactionId}). Re-crediting is blocked to prevent double payout.
               </div>
             )}
 
+            {/* Details Grid */}
             <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
               <div>
                 <span className="text-[11px] text-gray-500 block">Amount</span>
@@ -329,67 +435,109 @@ export function ReconcileDepositModal({
               </div>
 
               <div>
-                <span className="text-[11px] text-gray-500 block">SafeHaven Provider Fee</span>
-                <span className="font-semibold text-gray-700 text-xs">
-                  ₦{verifiedData?.feeInNaira !== undefined ? Number(verifiedData.feeInNaira).toFixed(2) : "0.00"}
-                  <span className="text-[10px] text-gray-400 font-normal ml-1">(Provider Fee)</span>
+                <span className="text-[11px] text-gray-500 block">Sender</span>
+                <span className="font-medium text-gray-800 truncate block">
+                  {verifiedData.senderName || senderName || "External"}
+                </span>
+                {verifiedData.senderEmail && (
+                  <span className="text-[10px] text-gray-500 block truncate">
+                    {verifiedData.senderEmail}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <span className="text-[11px] text-gray-500 block">Sender Account</span>
+                <span className="font-mono text-gray-800">
+                  {verifiedData.senderAccountNumber || "External"}
                 </span>
               </div>
 
               <div>
                 <span className="text-[11px] text-gray-500 block">
-                  {isOutward ? "Recipient Name" : "Sender Name"}
+                  {isInternal ? "Receiver Account" : "Target Account"}
                 </span>
-                <span className="font-medium text-gray-800 truncate block">
-                  {senderName || verifiedData.senderName || "External Sender"}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-[11px] text-gray-500 block">Target Account</span>
                 <span className="font-mono text-gray-800">
                   {effectiveAccountNumber || "Not set"}
                 </span>
+                {verifiedData.destinationAccountName && (
+                  <span className="text-[10px] text-gray-500 block truncate">
+                    {verifiedData.destinationAccountName}
+                  </span>
+                )}
               </div>
 
               <div className="col-span-2">
-                <span className="text-[11px] text-gray-500 block">Session ID</span>
+                <span className="text-[11px] text-gray-500 block">Reference / Session ID</span>
                 <span className="font-mono text-gray-800 text-[10px] truncate block" title={sessionId}>
-                  {sessionId}
+                  {verifiedData.reference || sessionId}
                 </span>
               </div>
             </div>
           </div>
         )}
 
-        <DialogFooter className="gap-2 pt-2">
+        {/* Dynamic Action Footer */}
+        <DialogFooter className="gap-2 pt-2 sm:justify-between">
           <Button
             type="button"
             variant="ghost"
             onClick={handleClose}
-            disabled={reconcileMutation.isPending}
+            disabled={isMutating}
             className="h-9 text-xs"
           >
             Cancel
           </Button>
-          <Button
-            type="button"
-            disabled={
-              !verifiedData ||
-              isDisabled ||
-              !effectiveAccountNumber ||
-              reconcileMutation.isPending ||
-              verifyMutation.isPending
-            }
-            onClick={() => reconcileMutation.mutate()}
-            className="h-9 text-xs bg-blue hover:bg-blue-600 text-white font-semibold px-4"
-          >
-            {reconcileMutation.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              `Confirm & Credit ₦${effectiveAmount ? effectiveAmount.toLocaleString() : "0"}`
-            )}
-          </Button>
+
+          {isInternal ? (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                disabled={!isPending || isMutating}
+                onClick={() => reconcilePendingMutation.mutate("REVERSE_TO_SENDER")}
+                className="h-9 text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 flex items-center gap-1"
+              >
+                {reconcilePendingMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5" />
+                )}
+                Reverse & Refund Sender
+              </Button>
+              <Button
+                type="button"
+                disabled={!isPending || isMutating}
+                onClick={() => reconcilePendingMutation.mutate("FORCE_CREDIT_RECEIVER")}
+                className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 flex items-center gap-1"
+              >
+                {reconcilePendingMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                )}
+                Force Credit Receiver
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              disabled={
+                !verifiedData ||
+                isOutward ||
+                isAlreadyReconciled ||
+                !effectiveAccountNumber ||
+                isMutating
+              }
+              onClick={() => reconcileInwardMutation.mutate()}
+              className="h-9 text-xs bg-blue hover:bg-blue-600 text-white font-semibold px-4"
+            >
+              {reconcileInwardMutation.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                `Confirm & Credit ₦${effectiveAmount ? effectiveAmount.toLocaleString() : "0"}`
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
