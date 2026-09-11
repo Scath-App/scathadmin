@@ -1604,32 +1604,20 @@ export default function UserDetailPage() {
                 : (auditReport.transactions?.items ?? []);
 
               const totalTxCount =
-                typeof auditReport.transactions === "object" &&
-                !Array.isArray(auditReport.transactions)
+                !Array.isArray(auditReport.transactions) && auditReport.transactions?.total != null
                   ? auditReport.transactions.total
                   : txList.length;
 
+              // Consume the authoritative backend financial calculations directly
               const totalInflowKobo =
-                typeof auditReport.transactions === "object" &&
                 !Array.isArray(auditReport.transactions)
-                  ? (auditReport.transactions.inflow?.totalAmountInKobo ?? 0)
-                  : txList
-                      .filter((t) => t.type === "CREDIT")
-                      .reduce(
-                        (acc, t) => acc + (t.amountInKobo ?? (t.amount ? t.amount * 100 : 0)),
-                        0,
-                      );
+                  ? (auditReport.transactions?.inflow?.totalAmountInKobo ?? 0)
+                  : 0;
 
               const totalOutflowKobo =
-                typeof auditReport.transactions === "object" &&
                 !Array.isArray(auditReport.transactions)
-                  ? (auditReport.transactions.outflow?.totalAmountInKobo ?? 0)
-                  : txList
-                      .filter((t) => t.type === "DEBIT")
-                      .reduce(
-                        (acc, t) => acc + (t.amountInKobo ?? (t.amount ? t.amount * 100 : 0)),
-                        0,
-                      );
+                  ? (auditReport.transactions?.outflow?.totalAmountInKobo ?? 0)
+                  : 0;
 
               const totalActiveBalanceKobo =
                 auditReport.accounts?.reduce(
