@@ -434,50 +434,70 @@ export default function KycReviewsPage() {
 
               {/* Didit AI Fraud & Biometric Alert Banner */}
               {((selectedVerification.diditWarnings && selectedVerification.diditWarnings.length > 0) ||
-                (selectedVerification.duplicateFaces && selectedVerification.duplicateFaces.length > 0)) && (
-                <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-700 dark:text-red-400 space-y-3">
-                  <div className="flex items-center gap-2 font-bold text-sm">
-                    <AlertOctagon className="h-5 w-5 text-red-600 flex-shrink-0" />
-                    DIDIT AI FRAUD & BIOMETRIC DUPLICATE WARNING
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    {selectedVerification.diditWarnings?.map((w, idx) => (
-                      <div key={idx} className="bg-background/80 p-3 rounded-lg border border-red-500/20 text-foreground space-y-1">
-                        <div className="flex items-center justify-between font-semibold">
-                          <span className="text-red-600 dark:text-red-400 flex items-center gap-1.5">
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                            {w.short_description || w.log_type}
-                          </span>
-                          {w.similarity_percentage != null && (
+                (selectedVerification.duplicateFaces && selectedVerification.duplicateFaces.length > 0)) && (() => {
+                const raw = selectedVerification.diditWarnings || [];
+                const hasMismatchName = raw.some(
+                  (w) =>
+                    w.log_type === "DUPLICATED_FACE_NAME_MISMATCH" ||
+                    w.short_description?.toLowerCase().includes("different name")
+                );
+
+                const filteredWarnings = raw.filter((w) => {
+                  if (
+                    hasMismatchName &&
+                    w.log_type !== "DUPLICATED_FACE_NAME_MISMATCH" &&
+                    w.short_description?.toLowerCase().includes("approved session")
+                  ) {
+                    return false;
+                  }
+                  return true;
+                });
+
+                return (
+                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-700 dark:text-red-400 space-y-3">
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                      <AlertOctagon className="h-5 w-5 text-red-600 flex-shrink-0" />
+                      DIDIT AI FRAUD & BIOMETRIC DUPLICATE WARNING
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      {filteredWarnings.map((w, idx) => (
+                        <div key={idx} className="bg-background/80 p-3 rounded-lg border border-red-500/20 text-foreground space-y-1">
+                          <div className="flex items-center justify-between font-semibold">
+                            <span className="text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              {w.short_description || w.log_type}
+                            </span>
+                            {w.similarity_percentage != null && (
+                              <Badge variant="destructive" className="text-[10px]">
+                                {w.similarity_percentage}% Biometric Match
+                              </Badge>
+                            )}
+                          </div>
+                          {w.long_description && (
+                            <p className="text-muted-foreground text-xs leading-relaxed">{w.long_description}</p>
+                          )}
+                        </div>
+                      ))}
+                      {selectedVerification.duplicateFaces?.map((dup, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-background/80 p-3 rounded-lg border border-red-500/20 text-xs text-foreground">
+                          <div>
+                            <span className="font-semibold text-red-600 dark:text-red-400">Previous Identity Session:</span>{" "}
+                            <span className="font-mono text-[11px] text-muted-foreground">{dup.session_id}</span>
+                            {dup.verification_date && (
+                              <span className="text-[11px] text-muted-foreground ml-2">({format(new Date(dup.verification_date), "MMM d, yyyy")})</span>
+                            )}
+                          </div>
+                          {dup.similarity_percentage != null && (
                             <Badge variant="destructive" className="text-[10px]">
-                              {w.similarity_percentage}% Biometric Match
+                              {dup.similarity_percentage}% Biometric Similarity
                             </Badge>
                           )}
                         </div>
-                        {w.long_description && (
-                          <p className="text-muted-foreground text-xs leading-relaxed">{w.long_description}</p>
-                        )}
-                      </div>
-                    ))}
-                    {selectedVerification.duplicateFaces?.map((dup, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-background/80 p-3 rounded-lg border border-red-500/20 text-xs text-foreground">
-                        <div>
-                          <span className="font-semibold text-red-600 dark:text-red-400">Previous Identity Session:</span>{" "}
-                          <span className="font-mono text-[11px] text-muted-foreground">{dup.session_id}</span>
-                          {dup.verification_date && (
-                            <span className="text-[11px] text-muted-foreground ml-2">({format(new Date(dup.verification_date), "MMM d, yyyy")})</span>
-                          )}
-                        </div>
-                        {dup.similarity_percentage != null && (
-                          <Badge variant="destructive" className="text-[10px]">
-                            {dup.similarity_percentage}% Biometric Similarity
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Visual Inspection Section: Business Corporate Dossier (Tier 4) vs Personal 3-Way Photo Comparison (Tier 2/3) */}
               {selectedVerification.targetTierLevel === 4 ||
@@ -593,136 +613,156 @@ export default function KycReviewsPage() {
                     );
                   })()}
                 </div>
-              ) : (
+              ) : (() => {
                 /* 3-Way Personal Forensic Photo Comparison */
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-blue-500" />
-                    3-Way Visual Photo Forensic Comparison
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* Photo 1: BVN Identity Photo */}
-                    <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
-                      <p className="text-xs font-semibold text-muted-foreground">1. BVN Reference Photo</p>
-                      {formatMediaUrl(selectedVerification.primaryPhotoUrl) ? (
-                        <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
-                          <img
-                            src={formatMediaUrl(selectedVerification.primaryPhotoUrl)!}
-                            alt="BVN Reference"
-                            className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPreviewImage({
-                                url: formatMediaUrl(selectedVerification.primaryPhotoUrl)!,
-                                title: "BVN Reference Photo",
-                              })
-                            }
-                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
-                          >
-                            <ZoomIn className="h-4 w-4" /> Click to Zoom
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                          No BVN Photo Available
-                        </div>
-                      )}
-                      {formatMediaUrl(selectedVerification.primaryPhotoUrl) && (
-                        <a
-                          href={formatMediaUrl(selectedVerification.primaryPhotoUrl)!}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
-                        >
-                          Open Full Resolution <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
+                  const isNinPrimary = selectedVerification.user?.kycType?.toUpperCase() === "NIN";
+                  
+                  const photo1Title = isNinPrimary ? "1. NIN Slip / Document" : "1. BVN Reference Photo";
+                  const photo1Url = isNinPrimary
+                    ? (selectedVerification.ninPhotoUrl || selectedVerification.user?.ninPhotoUrl || selectedVerification.primaryPhotoUrl)
+                    : (selectedVerification.bvnPhotoUrl || selectedVerification.user?.bvnPhotoUrl || selectedVerification.primaryPhotoUrl);
+                  const photo1Empty = isNinPrimary ? "No NIN Slip Uploaded" : "No BVN Photo Available";
 
-                    {/* Photo 2: NIN Slip Photo */}
-                    <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
-                      <p className="text-xs font-semibold text-muted-foreground">2. NIN Slip Photo</p>
-                      {formatMediaUrl(selectedVerification.secondaryPhotoUrl) ? (
-                        <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
-                          <img
-                            src={formatMediaUrl(selectedVerification.secondaryPhotoUrl)!}
-                            alt="NIN Slip Photo"
-                            className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPreviewImage({
-                                url: formatMediaUrl(selectedVerification.secondaryPhotoUrl)!,
-                                title: "NIN Slip Photo",
-                              })
-                            }
-                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
-                          >
-                            <ZoomIn className="h-4 w-4" /> Click to Zoom
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                          No NIN Photo Available
-                        </div>
-                      )}
-                      {formatMediaUrl(selectedVerification.secondaryPhotoUrl) && (
-                        <a
-                          href={formatMediaUrl(selectedVerification.secondaryPhotoUrl)!}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
-                        >
-                          Open Full Resolution <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
+                  const photo2Title = isNinPrimary ? "2. BVN Reference Photo (Tier 3)" : "2. NIN Slip / Document (Tier 3)";
+                  const photo2Url = isNinPrimary
+                    ? (selectedVerification.bvnPhotoUrl || selectedVerification.user?.bvnPhotoUrl || selectedVerification.secondaryPhotoUrl)
+                    : (selectedVerification.ninPhotoUrl || selectedVerification.user?.ninPhotoUrl || selectedVerification.secondaryPhotoUrl);
+                  const photo2Empty = isNinPrimary ? "No BVN Photo Available" : "No NIN Document Uploaded";
 
-                    {/* Photo 3: Didit Liveness Selfie */}
-                    <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
-                      <p className="text-xs font-semibold text-muted-foreground">3. Didit Liveness Selfie</p>
-                      {formatMediaUrl(selectedVerification.livenessSelfieUrl) ? (
-                        <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
-                          <img
-                            src={formatMediaUrl(selectedVerification.livenessSelfieUrl)!}
-                            alt="Liveness Selfie"
-                            className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPreviewImage({
-                                url: formatMediaUrl(selectedVerification.livenessSelfieUrl)!,
-                                title: "Didit Liveness Selfie",
-                              })
-                            }
-                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
-                          >
-                            <ZoomIn className="h-4 w-4" /> Click to Zoom
-                          </button>
+                  const photo3Title = "3. Didit Liveness Selfie";
+                  const photo3Url = selectedVerification.livenessSelfieUrl;
+                  const photo3Empty = "No Liveness Selfie Available";
+
+                  return (
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold flex items-center gap-2">
+                        <Eye className="h-4 w-4 text-blue-500" />
+                        3-Way Visual Photo Forensic Comparison
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {/* Photo 1: Primary Photo */}
+                        <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
+                          <p className="text-xs font-semibold text-muted-foreground">{photo1Title}</p>
+                          {formatMediaUrl(photo1Url) ? (
+                            <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
+                              <img
+                                src={formatMediaUrl(photo1Url)!}
+                                alt={photo1Title}
+                                className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    url: formatMediaUrl(photo1Url)!,
+                                    title: photo1Title,
+                                  })
+                                }
+                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
+                              >
+                                <ZoomIn className="h-4 w-4" /> Click to Zoom
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                              {photo1Empty}
+                            </div>
+                          )}
+                          {formatMediaUrl(photo1Url) && (
+                            <a
+                              href={formatMediaUrl(photo1Url)!}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
+                            >
+                              Open Full Resolution <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
                         </div>
-                      ) : (
-                        <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                          No Liveness Selfie Available
+
+                        {/* Photo 2: Complementary Photo */}
+                        <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
+                          <p className="text-xs font-semibold text-muted-foreground">{photo2Title}</p>
+                          {formatMediaUrl(photo2Url) ? (
+                            <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
+                              <img
+                                src={formatMediaUrl(photo2Url)!}
+                                alt={photo2Title}
+                                className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    url: formatMediaUrl(photo2Url)!,
+                                    title: photo2Title,
+                                  })
+                                }
+                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
+                              >
+                                <ZoomIn className="h-4 w-4" /> Click to Zoom
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                              {photo2Empty}
+                            </div>
+                          )}
+                          {formatMediaUrl(photo2Url) && (
+                            <a
+                              href={formatMediaUrl(photo2Url)!}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
+                            >
+                              Open Full Resolution <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
                         </div>
-                      )}
-                      {formatMediaUrl(selectedVerification.livenessSelfieUrl) && (
-                        <a
-                          href={formatMediaUrl(selectedVerification.livenessSelfieUrl)!}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
-                        >
-                          Open Full Resolution <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
+
+                        {/* Photo 3: Didit Liveness Selfie */}
+                        <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
+                          <p className="text-xs font-semibold text-muted-foreground">{photo3Title}</p>
+                          {formatMediaUrl(photo3Url) ? (
+                            <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
+                              <img
+                                src={formatMediaUrl(photo3Url)!}
+                                alt={photo3Title}
+                                className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    url: formatMediaUrl(photo3Url)!,
+                                    title: photo3Title,
+                                  })
+                                }
+                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
+                              >
+                                <ZoomIn className="h-4 w-4" /> Click to Zoom
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                              {photo3Empty}
+                            </div>
+                          )}
+                          {formatMediaUrl(photo3Url) && (
+                            <a
+                              href={formatMediaUrl(photo3Url)!}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
+                            >
+                              Open Full Resolution <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              )}
+                  );
+              })()}
 
               {/* Score Diagnostics Grid */}
               <div className="space-y-2">

@@ -254,6 +254,8 @@ export interface EnrichedKycVerification {
   primaryPhotoUrl: string | null;
   secondaryPhotoUrl: string | null;
   livenessSelfieUrl: string | null;
+  bvnPhotoUrl?: string | null;
+  ninPhotoUrl?: string | null;
   triangularFaceScore: number | null;
   triangularFaceStatus: string | null;
   livenessScore: number | null;
@@ -293,6 +295,8 @@ export interface EnrichedKycVerification {
     kycType?: string | null;
     bvnNumber?: string | null;
     ninNumber?: string | null;
+    bvnPhotoUrl?: string | null;
+    ninPhotoUrl?: string | null;
   } | null;
   adminNotes: string | null;
   reviewedByAdminId: number | null;
