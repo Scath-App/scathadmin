@@ -432,9 +432,20 @@ export default function KycReviewsPage() {
                 </div>
               </div>
 
-              {/* Didit AI Fraud & Biometric Alert Banner */}
-              {((selectedVerification.diditWarnings && selectedVerification.diditWarnings.length > 0) ||
-                (selectedVerification.duplicateFaces && selectedVerification.duplicateFaces.length > 0)) && (() => {
+              {/* Compliance & Biometric Forensic Alerts */}
+              {(() => {
+                const isFaceMismatch =
+                  selectedVerification.faceMatchPassed === false ||
+                  selectedVerification.failureStage === "DIDIT_FACE_MISMATCH";
+                const isLivenessFailed =
+                  selectedVerification.livenessPassed === false ||
+                  selectedVerification.failureStage === "DIDIT_LIVENESS_FAILED";
+                const hasDiditWarnings =
+                  (selectedVerification.diditWarnings && selectedVerification.diditWarnings.length > 0) ||
+                  (selectedVerification.duplicateFaces && selectedVerification.duplicateFaces.length > 0);
+
+                if (!isFaceMismatch && !isLivenessFailed && !hasDiditWarnings) return null;
+
                 const raw = selectedVerification.diditWarnings || [];
                 const hasMismatchName = raw.some(
                   (w) =>
@@ -454,47 +465,94 @@ export default function KycReviewsPage() {
                 });
 
                 return (
-                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-700 dark:text-red-400 space-y-3">
-                    <div className="flex items-center gap-2 font-bold text-sm">
-                      <AlertOctagon className="h-5 w-5 text-red-600 flex-shrink-0" />
-                      DIDIT AI FRAUD & BIOMETRIC DUPLICATE WARNING
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      {filteredWarnings.map((w, idx) => (
-                        <div key={idx} className="bg-background/80 p-3 rounded-lg border border-red-500/20 text-foreground space-y-1">
-                          <div className="flex items-center justify-between font-semibold">
-                            <span className="text-red-600 dark:text-red-400 flex items-center gap-1.5">
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              {w.short_description || w.log_type}
-                            </span>
-                            {w.similarity_percentage != null && (
-                              <Badge variant="destructive" className="text-[10px]">
-                                {w.similarity_percentage}% Biometric Match
-                              </Badge>
-                            )}
+                  <div className="space-y-3">
+                    {/* Primary Failure: 1:1 Face Mismatch */}
+                    {isFaceMismatch && (
+                      <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-700 dark:text-red-400 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 font-bold text-sm">
+                            <AlertOctagon className="h-5 w-5 text-red-600 flex-shrink-0" />
+                            PRIMARY AUDIT REJECT: BIOMETRIC 1:1 FACE MISMATCH
                           </div>
-                          {w.long_description && (
-                            <p className="text-muted-foreground text-xs leading-relaxed">{w.long_description}</p>
-                          )}
-                        </div>
-                      ))}
-                      {selectedVerification.duplicateFaces?.map((dup, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-background/80 p-3 rounded-lg border border-red-500/20 text-xs text-foreground">
-                          <div>
-                            <span className="font-semibold text-red-600 dark:text-red-400">Previous Identity Session:</span>{" "}
-                            <span className="font-mono text-[11px] text-muted-foreground">{dup.session_id}</span>
-                            {dup.verification_date && (
-                              <span className="text-[11px] text-muted-foreground ml-2">({format(new Date(dup.verification_date), "MMM d, yyyy")})</span>
-                            )}
-                          </div>
-                          {dup.similarity_percentage != null && (
-                            <Badge variant="destructive" className="text-[10px]">
-                              {dup.similarity_percentage}% Biometric Similarity
+                          {selectedVerification.faceMatchScore != null && (
+                            <Badge variant="destructive" className="font-mono text-xs px-2 py-0.5">
+                              Score: {selectedVerification.faceMatchScore}% (Pass: 75%)
                             </Badge>
                           )}
                         </div>
-                      ))}
-                    </div>
+                        <p className="text-xs text-red-600/90 dark:text-red-300 leading-relaxed">
+                          The user's 3D liveness selfie failed biometric 1:1 comparison against their government reference photo
+                          {selectedVerification.faceMatchScore != null ? ` (similarity score: ${selectedVerification.faceMatchScore}% vs 75% required)` : ""}.
+                          Carefully cross-examine the reference photo and the liveness selfie in the comparison view below.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Primary Failure: Liveness Test Failed */}
+                    {isLivenessFailed && (
+                      <div className="rounded-xl border border-orange-500/40 bg-orange-500/10 p-4 text-orange-700 dark:text-orange-400 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 font-bold text-sm">
+                            <AlertOctagon className="h-5 w-5 text-orange-600 flex-shrink-0" />
+                            PRIMARY AUDIT REJECT: 3D BIOMETRIC LIVENESS CHECK FAILED
+                          </div>
+                          {selectedVerification.livenessScore != null && (
+                            <Badge variant="outline" className="font-mono text-xs border-orange-500/30 text-orange-600 bg-orange-500/15">
+                              Liveness Score: {selectedVerification.livenessScore}%
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-orange-600/90 dark:text-orange-300 leading-relaxed">
+                          Didit AI detected potential non-live presentation, pre-recorded media, or mask artifacts during the session.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Secondary Advisory: Didit Anomaly / Duplicate Face Warning */}
+                    {hasDiditWarnings && (
+                      <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-700 dark:text-amber-400 space-y-3">
+                        <div className="flex items-center gap-2 font-bold text-sm">
+                          <ShieldAlert className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                          DIDIT AI BIOMETRIC ANOMALY & DUPLICATE ADVISORY
+                        </div>
+                        <div className="space-y-2 text-xs">
+                          {filteredWarnings.map((w, idx) => (
+                            <div key={idx} className="bg-background/80 p-3 rounded-lg border border-amber-500/20 text-foreground space-y-1">
+                              <div className="flex items-center justify-between font-semibold">
+                                <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  {w.short_description || w.log_type}
+                                </span>
+                                {w.similarity_percentage != null && (
+                                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 text-[10px]">
+                                    {w.similarity_percentage}% Match
+                                  </Badge>
+                                )}
+                              </div>
+                              {w.long_description && (
+                                <p className="text-muted-foreground text-xs leading-relaxed">{w.long_description}</p>
+                              )}
+                            </div>
+                          ))}
+                          {selectedVerification.duplicateFaces?.map((dup, idx) => (
+                            <div key={idx} className="flex items-center justify-between bg-background/80 p-3 rounded-lg border border-amber-500/20 text-xs text-foreground">
+                              <div>
+                                <span className="font-semibold text-amber-600 dark:text-amber-400">Previous Identity Session:</span>{" "}
+                                <span className="font-mono text-[11px] text-muted-foreground">{dup.session_id}</span>
+                                {dup.verification_date && (
+                                  <span className="text-[11px] text-muted-foreground ml-2">({format(new Date(dup.verification_date), "MMM d, yyyy")})</span>
+                                )}
+                              </div>
+                              {dup.similarity_percentage != null && (
+                                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 text-[10px]">
+                                  {dup.similarity_percentage}% Biometric Similarity
+                                </Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
