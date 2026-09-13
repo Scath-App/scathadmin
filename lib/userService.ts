@@ -264,6 +264,23 @@ export interface EnrichedKycVerification {
   poaStatus?: string | null;
   poaAddress?: string | null;
   poaParsedAddress?: { street?: string; city?: string; country?: string } | null;
+  poaDocumentUrl?: string | null;
+  diditWarnings?: Array<{
+    risk?: string;
+    short_description?: string;
+    long_description?: string;
+    similarity_percentage?: number;
+    log_type?: string;
+    [key: string]: any;
+  }>;
+  duplicateFaces?: Array<{
+    similarity_percentage?: number;
+    session_id?: string;
+    vendor_data?: string;
+    verification_date?: string;
+    match_image_url?: string;
+    [key: string]: any;
+  }>;
   demographicData: any | null;
   complementaryIdType: string | null;
   complementaryIdNumber: string | null;
@@ -272,6 +289,10 @@ export interface EnrichedKycVerification {
     lastName: string | null;
     email: string | null;
     phoneNumber: string | null;
+    dob?: string | null;
+    kycType?: string | null;
+    bvnNumber?: string | null;
+    ninNumber?: string | null;
   } | null;
   adminNotes: string | null;
   reviewedByAdminId: number | null;
