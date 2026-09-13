@@ -432,7 +432,7 @@ export default function KycReviewsPage() {
                 </div>
               </div>
 
-              {/* Compliance & Biometric Forensic Alerts */}
+              {/* Single Unified Forensic Alert Banner */}
               {(() => {
                 const isFaceMismatch =
                   selectedVerification.faceMatchPassed === false ||
@@ -464,95 +464,97 @@ export default function KycReviewsPage() {
                   return true;
                 });
 
+                const primaryWarning = filteredWarnings[0];
+                const primaryDuplicate = selectedVerification.duplicateFaces?.[0];
+
+                // Case A: 1:1 Face Mismatch (Most common failure)
+                if (isFaceMismatch) {
+                  return (
+                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 font-bold text-sm text-red-600 dark:text-red-400">
+                          <AlertOctagon className="h-5 w-5 text-red-600 flex-shrink-0" />
+                          Biometric 1:1 Face Match Failed
+                        </div>
+                        {selectedVerification.faceMatchScore != null && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-red-600 text-white shadow-sm">
+                            {selectedVerification.faceMatchScore}% Match (Pass: 75%)
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed">
+                        The user's 3D liveness selfie failed facial comparison against the government reference photo.
+                        Review the comparison photos below to verify physical identity.
+                      </p>
+
+                      {(primaryWarning || primaryDuplicate) && (
+                        <div className="flex items-start gap-2 pt-2 border-t border-red-500/20 text-xs text-amber-700 dark:text-amber-300">
+                          <ShieldAlert className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-semibold">Didit Advisory:</span>{" "}
+                            {primaryWarning?.short_description || "Potential face duplicate detected on another session"}
+                            {primaryWarning?.additional_data?.duplicated_session_id && (
+                              <span className="font-mono text-[11px] text-muted-foreground ml-1">
+                                (Session {primaryWarning.additional_data.duplicated_session_id.slice(0, 8)}...)
+                              </span>
+                            )}
+                            {primaryDuplicate?.similarity_percentage && (
+                              <span className="ml-1 font-semibold">({primaryDuplicate.similarity_percentage}% similarity)</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Case B: Liveness Failed
+                if (isLivenessFailed) {
+                  return (
+                    <div className="rounded-xl border border-orange-500/40 bg-orange-500/10 p-4 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 font-bold text-sm text-orange-600 dark:text-orange-400">
+                          <AlertOctagon className="h-5 w-5 text-orange-600 flex-shrink-0" />
+                          3D Liveness Test Failed
+                        </div>
+                        {selectedVerification.livenessScore != null && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-orange-600 text-white shadow-sm">
+                            Liveness: {selectedVerification.livenessScore}%
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed">
+                        Didit AI detected possible non-live presentation, spoofing, or pre-recorded media.
+                      </p>
+                      {(primaryWarning || primaryDuplicate) && (
+                        <div className="flex items-start gap-2 pt-2 border-t border-orange-500/20 text-xs text-amber-700 dark:text-amber-300">
+                          <ShieldAlert className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-semibold">Didit Advisory:</span>{" "}
+                            {primaryWarning?.short_description || "Potential biometric match on another session"}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Case C: Pure Duplicate / Anomaly Advisory
                 return (
-                  <div className="space-y-3">
-                    {/* Primary Failure: 1:1 Face Mismatch */}
-                    {isFaceMismatch && (
-                      <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-700 dark:text-red-400 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 font-bold text-sm">
-                            <AlertOctagon className="h-5 w-5 text-red-600 flex-shrink-0" />
-                            PRIMARY AUDIT REJECT: BIOMETRIC 1:1 FACE MISMATCH
-                          </div>
-                          {selectedVerification.faceMatchScore != null && (
-                            <Badge variant="destructive" className="font-mono text-xs px-2 py-0.5">
-                              Score: {selectedVerification.faceMatchScore}% (Pass: 75%)
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-red-600/90 dark:text-red-300 leading-relaxed">
-                          The user's 3D liveness selfie failed biometric 1:1 comparison against their government reference photo
-                          {selectedVerification.faceMatchScore != null ? ` (similarity score: ${selectedVerification.faceMatchScore}% vs 75% required)` : ""}.
-                          Carefully cross-examine the reference photo and the liveness selfie in the comparison view below.
-                        </p>
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 font-bold text-sm text-amber-700 dark:text-amber-300">
+                        <ShieldAlert className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                        Didit Biometric Duplicate Alert
                       </div>
-                    )}
-
-                    {/* Primary Failure: Liveness Test Failed */}
-                    {isLivenessFailed && (
-                      <div className="rounded-xl border border-orange-500/40 bg-orange-500/10 p-4 text-orange-700 dark:text-orange-400 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 font-bold text-sm">
-                            <AlertOctagon className="h-5 w-5 text-orange-600 flex-shrink-0" />
-                            PRIMARY AUDIT REJECT: 3D BIOMETRIC LIVENESS CHECK FAILED
-                          </div>
-                          {selectedVerification.livenessScore != null && (
-                            <Badge variant="outline" className="font-mono text-xs border-orange-500/30 text-orange-600 bg-orange-500/15">
-                              Liveness Score: {selectedVerification.livenessScore}%
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-orange-600/90 dark:text-orange-300 leading-relaxed">
-                          Didit AI detected potential non-live presentation, pre-recorded media, or mask artifacts during the session.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Secondary Advisory: Didit Anomaly / Duplicate Face Warning */}
-                    {hasDiditWarnings && (
-                      <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-700 dark:text-amber-400 space-y-3">
-                        <div className="flex items-center gap-2 font-bold text-sm">
-                          <ShieldAlert className="h-5 w-5 text-amber-600 flex-shrink-0" />
-                          DIDIT AI BIOMETRIC ANOMALY & DUPLICATE ADVISORY
-                        </div>
-                        <div className="space-y-2 text-xs">
-                          {filteredWarnings.map((w, idx) => (
-                            <div key={idx} className="bg-background/80 p-3 rounded-lg border border-amber-500/20 text-foreground space-y-1">
-                              <div className="flex items-center justify-between font-semibold">
-                                <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                                  <AlertTriangle className="h-3.5 w-3.5" />
-                                  {w.short_description || w.log_type}
-                                </span>
-                                {w.similarity_percentage != null && (
-                                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 text-[10px]">
-                                    {w.similarity_percentage}% Match
-                                  </Badge>
-                                )}
-                              </div>
-                              {w.long_description && (
-                                <p className="text-muted-foreground text-xs leading-relaxed">{w.long_description}</p>
-                              )}
-                            </div>
-                          ))}
-                          {selectedVerification.duplicateFaces?.map((dup, idx) => (
-                            <div key={idx} className="flex items-center justify-between bg-background/80 p-3 rounded-lg border border-amber-500/20 text-xs text-foreground">
-                              <div>
-                                <span className="font-semibold text-amber-600 dark:text-amber-400">Previous Identity Session:</span>{" "}
-                                <span className="font-mono text-[11px] text-muted-foreground">{dup.session_id}</span>
-                                {dup.verification_date && (
-                                  <span className="text-[11px] text-muted-foreground ml-2">({format(new Date(dup.verification_date), "MMM d, yyyy")})</span>
-                                )}
-                              </div>
-                              {dup.similarity_percentage != null && (
-                                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 text-[10px]">
-                                  {dup.similarity_percentage}% Biometric Similarity
-                                </Badge>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-amber-600 text-white shadow-sm">
+                        Biometric Flag
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                      {primaryWarning?.long_description || primaryWarning?.short_description || "This face was approved on an earlier session under a different profile name."}
+                    </p>
                   </div>
                 );
               })()}
@@ -672,156 +674,91 @@ export default function KycReviewsPage() {
                   })()}
                 </div>
               ) : (() => {
-                /* 3-Way Personal Forensic Photo Comparison */
-                  const isNinPrimary = selectedVerification.user?.kycType?.toUpperCase() === "NIN";
-                  
-                  const photo1Title = isNinPrimary ? "1. NIN Slip / Document" : "1. BVN Reference Photo";
-                  const photo1Url = isNinPrimary
-                    ? (selectedVerification.ninPhotoUrl || selectedVerification.user?.ninPhotoUrl || selectedVerification.primaryPhotoUrl)
-                    : (selectedVerification.bvnPhotoUrl || selectedVerification.user?.bvnPhotoUrl || selectedVerification.primaryPhotoUrl);
-                  const photo1Empty = isNinPrimary ? "No NIN Slip Uploaded" : "No BVN Photo Available";
+                /* Adaptive Personal Forensic Photo Comparison */
+                const isNinPrimary = selectedVerification.user?.kycType?.toUpperCase() === "NIN";
 
-                  const photo2Title = isNinPrimary ? "2. BVN Reference Photo (Tier 3)" : "2. NIN Slip / Document (Tier 3)";
-                  const photo2Url = isNinPrimary
-                    ? (selectedVerification.bvnPhotoUrl || selectedVerification.user?.bvnPhotoUrl || selectedVerification.secondaryPhotoUrl)
-                    : (selectedVerification.ninPhotoUrl || selectedVerification.user?.ninPhotoUrl || selectedVerification.secondaryPhotoUrl);
-                  const photo2Empty = isNinPrimary ? "No BVN Photo Available" : "No NIN Document Uploaded";
+                const primaryTitle = isNinPrimary ? "1. NIN Slip / Document" : "1. BVN Reference Photo";
+                const primaryRawUrl = isNinPrimary
+                  ? (selectedVerification.ninPhotoUrl || selectedVerification.user?.ninPhotoUrl || selectedVerification.primaryPhotoUrl)
+                  : (selectedVerification.bvnPhotoUrl || selectedVerification.user?.bvnPhotoUrl || selectedVerification.primaryPhotoUrl);
 
-                  const photo3Title = "3. Didit Liveness Selfie";
-                  const photo3Url = selectedVerification.livenessSelfieUrl;
-                  const photo3Empty = "No Liveness Selfie Available";
+                const complementaryTitle = isNinPrimary ? "2. BVN Reference Photo (Tier 3)" : "2. NIN Slip / Document (Tier 3)";
+                const complementaryRawUrl = isNinPrimary
+                  ? (selectedVerification.bvnPhotoUrl || selectedVerification.user?.bvnPhotoUrl || selectedVerification.secondaryPhotoUrl)
+                  : (selectedVerification.ninPhotoUrl || selectedVerification.user?.ninPhotoUrl || selectedVerification.secondaryPhotoUrl);
 
-                  return (
-                    <div className="space-y-3">
+                const selfieTitle = "Didit Liveness Selfie";
+                const selfieRawUrl = selectedVerification.livenessSelfieUrl;
+
+                const primaryUrl = formatMediaUrl(primaryRawUrl);
+                const complementaryUrl = formatMediaUrl(complementaryRawUrl);
+                const selfieUrl = formatMediaUrl(selfieRawUrl);
+
+                const availablePhotos: Array<{ title: string; url: string }> = [];
+
+                if (primaryUrl) {
+                  availablePhotos.push({ title: primaryTitle, url: primaryUrl });
+                }
+
+                if (complementaryUrl && complementaryUrl !== primaryUrl) {
+                  availablePhotos.push({ title: complementaryTitle, url: complementaryUrl });
+                }
+
+                if (selfieUrl) {
+                  availablePhotos.push({
+                    title: `${availablePhotos.length + 1}. ${selfieTitle}`,
+                    url: selfieUrl,
+                  });
+                }
+
+                const isTwoWay = availablePhotos.length === 2;
+
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold flex items-center gap-2">
                         <Eye className="h-4 w-4 text-blue-500" />
-                        3-Way Visual Photo Forensic Comparison
+                        {isTwoWay ? "2-Way Biometric Comparison (Reference vs Selfie)" : "3-Way Visual Photo Forensic Comparison"}
                       </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {/* Photo 1: Primary Photo */}
-                        <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
-                          <p className="text-xs font-semibold text-muted-foreground">{photo1Title}</p>
-                          {formatMediaUrl(photo1Url) ? (
-                            <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
-                              <img
-                                src={formatMediaUrl(photo1Url)!}
-                                alt={photo1Title}
-                                className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
-                              />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setPreviewImage({
-                                    url: formatMediaUrl(photo1Url)!,
-                                    title: photo1Title,
-                                  })
-                                }
-                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
-                              >
-                                <ZoomIn className="h-4 w-4" /> Click to Zoom
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                              {photo1Empty}
-                            </div>
-                          )}
-                          {formatMediaUrl(photo1Url) && (
-                            <a
-                              href={formatMediaUrl(photo1Url)!}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
-                            >
-                              Open Full Resolution <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
-                        </div>
-
-                        {/* Photo 2: Complementary Photo */}
-                        <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
-                          <p className="text-xs font-semibold text-muted-foreground">{photo2Title}</p>
-                          {formatMediaUrl(photo2Url) ? (
-                            <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
-                              <img
-                                src={formatMediaUrl(photo2Url)!}
-                                alt={photo2Title}
-                                className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
-                              />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setPreviewImage({
-                                    url: formatMediaUrl(photo2Url)!,
-                                    title: photo2Title,
-                                  })
-                                }
-                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
-                              >
-                                <ZoomIn className="h-4 w-4" /> Click to Zoom
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                              {photo2Empty}
-                            </div>
-                          )}
-                          {formatMediaUrl(photo2Url) && (
-                            <a
-                              href={formatMediaUrl(photo2Url)!}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
-                            >
-                              Open Full Resolution <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
-                        </div>
-
-                        {/* Photo 3: Didit Liveness Selfie */}
-                        <div className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between">
-                          <p className="text-xs font-semibold text-muted-foreground">{photo3Title}</p>
-                          {formatMediaUrl(photo3Url) ? (
-                            <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
-                              <img
-                                src={formatMediaUrl(photo3Url)!}
-                                alt={photo3Title}
-                                className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
-                              />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setPreviewImage({
-                                    url: formatMediaUrl(photo3Url)!,
-                                    title: photo3Title,
-                                  })
-                                }
-                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
-                              >
-                                <ZoomIn className="h-4 w-4" /> Click to Zoom
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="aspect-[3/4] max-h-56 w-full rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                              {photo3Empty}
-                            </div>
-                          )}
-                          {formatMediaUrl(photo3Url) && (
-                            <a
-                              href={formatMediaUrl(photo3Url)!}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
-                            >
-                              Open Full Resolution <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
+                      {isTwoWay && (
+                        <span className="text-xs text-muted-foreground font-medium">
+                          Direct 1:1 Biometric Comparison
+                        </span>
+                      )}
                     </div>
-                  );
-              })()}
 
+                    <div className={`grid grid-cols-1 ${isTwoWay ? "sm:grid-cols-2 max-w-2xl mx-auto" : "sm:grid-cols-3"} gap-4`}>
+                      {availablePhotos.map((photo, idx) => (
+                        <div key={idx} className="rounded-xl border p-3 bg-card text-center space-y-2 flex flex-col justify-between shadow-sm">
+                          <p className="text-xs font-semibold text-muted-foreground">{photo.title}</p>
+                          <div className="relative aspect-[3/4] max-h-56 mx-auto w-full overflow-hidden rounded-lg border bg-zinc-900/5 dark:bg-zinc-950/40 flex items-center justify-center group">
+                            <img
+                              src={photo.url}
+                              alt={photo.title}
+                              className="h-full w-full object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage({ url: photo.url, title: photo.title })}
+                              className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium cursor-pointer"
+                            >
+                              <ZoomIn className="h-4 w-4" /> Click to Zoom
+                            </button>
+                          </div>
+                          <a
+                            href={photo.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-blue-500 hover:underline inline-flex items-center justify-center gap-1"
+                          >
+                            Open Full Resolution <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {/* Score Diagnostics Grid */}
               <div className="space-y-2">
                 <p className="text-sm font-semibold flex items-center gap-2">
